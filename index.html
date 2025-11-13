@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Explorer: Expanded TEKS Mastery</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons for nice visual elements -->
+    <script type="module" src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom styles for a clean, educational look */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+       
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7; /* Light background */
+        }
+        .card-shadow {
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1), 0 5px 10px -5px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card-shadow:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+       
+        /* Grade-specific colors */
+        .grade-color-6 { background-color: #d1fae5; border-color: #059669; } /* Light Green */
+        .grade-color-7 { background-color: #dbeafe; border-color: #3b82f6; } /* Light Blue */
+        .grade-color-8 { background-color: #fee2e2; border-color: #ef4444; } /* Light Red */
+       
+        /* Message box styling */
+        .message-box {
+            position: fixed;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        .math-problem-box {
+            font-size: 1.875rem; /* text-3xl */
+            font-weight: 800; /* font-extrabold */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Global Message Box -->
+    <div id="message-box" class="message-box bg-green-500 text-white card-shadow hidden"></div>
+
+    <!-- Header / Navigation Bar -->
+    <header class="bg-white shadow-xl sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+            <h1 class="text-3xl font-black text-blue-700 mb-3 md:mb-0">
+                <i data-lucide="sparkles" class="inline-block w-8 h-8 mr-2 text-yellow-500"></i>
+                Math Explorer (45 TEKS)
+            </h1>
+            <!-- Navigation Buttons -->
+            <div class="flex space-x-3 sm:space-x-4">
+                <button id="contact-button" onclick="renderContactPage()" class="px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition duration-150 font-semibold flex items-center shadow-md">
+                    <i data-lucide="mail" class="w-5 h-5 mr-1"></i>
+                    Services & Contact
+                </button>
+                <button id="home-button" class="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition duration-150 font-semibold flex items-center shadow-md">
+                    <i data-lucide="home" class="w-5 h-5 mr-1"></i>
+                    Home
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main id="content-container" class="flex-grow container mx-auto p-4 md:p-8">
+        <!-- Content will be injected here by JavaScript -->
+        <h2 class="text-center text-2xl text-gray-500 mt-10">Loading...</h2>
+    </main>
+
+    <script>
+        // --- Global Variables and Setup ---
+        const contentContainer = document.getElementById('content-container');
+        const homeButton = document.getElementById('home-button');
+        const messageBox = document.getElementById('message-box');
+       
+        // Image URL provided by the user
+        const studentImageURL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-LaAqQhwlFXyoQQBfYwONi9UIdoIi1Mp0zw&s';
+
+        // --- TEKS MASTERY TRACKING CONFIG ---
+        const TEKS_MASTERY_THRESHOLD = 3;
+        let teksProgress = JSON.parse(localStorage.getItem('teksProgress') || '{}');
+        let masteredTEKS = JSON.parse(localStorage.getItem('masteredTEKS') || '{}');
+        let currentTeksId = null;
+        let currentGrade = null;
+        let currentQuestions = []; // Questions for the current practice session
+        let currentQuestionIndex = 0;
+        let currentQuizQuestions = []; // Questions for the final quiz
+        let currentQuizIndex = 0;
+        let quizScore = 0;
+        // ------------------------------------
+
+        // --- EXPANDED TEKS QUESTIONS DATASET (10 Q/A per TEKS) ---
+        // NOTE: The answers are generally simplified (no units, no complex formatting) to simplify checking.
+        const teksQuestions = {
+            // --- GRADE 6 (15 TEKS) ---
+            '6.2D': { title: "Order Rational Numbers", icon: 'git-compare', teks: "Order a set of rational numbers arising from mathematical and real-world contexts.",
+                questions: [
+                    { problem: "Order from least to greatest: $0.5, \frac{1}{3}, 0.45$. (Use commas)", answer: "1/3, 0.45, 0.5" },
+                    { problem: "Which is greater: $-\frac{3}{4}$ or $-0.8$?", answer: "-0.75" },
+                    { problem: "Order from greatest to least: $2, -1.5, \frac{5}{2}$. (Use commas)", answer: "2.5, 2, -1.5" },
+                    { problem: "Is $-1.2$ to the left or right of $-1$ on a number line? (Left/Right)", answer: "Left" },
+                    { problem: "Which is smaller: $40\%$ or $0.39$?", answer: "0.39" },
+                    { problem: "Order $\frac{1}{4}, 0.2, 0.3$ (L to G)", answer: "0.2, 1/4, 0.3" },
+                    { problem: "Which is larger: $1.5$ or $\frac{3}{2}$?", answer: "Equal" },
+                    { problem: "Order $-2, 1, -1$. (L to G)", answer: "-2, -1, 1" },
+                    { problem: "Convert $\frac{7}{10}$ to a decimal.", answer: "0.7" },
+                    { problem: "Which is closest to zero: $-0.1$ or $0.05$?", answer: "0.05" }
+                ]
+            },
+            '6.3D': { title: "Fraction/Decimal/Percent Conversion", icon: 'convert', teks: "Generate equivalent forms of fractions, decimals, and percents.",
+                questions: [
+                    { problem: "Convert $0.4$ to a percent.", answer: "40%" },
+                    { problem: "Convert $75\%$ to a simplified fraction.", answer: "3/4" },
+                    { problem: "Write $\frac{2}{5}$ as a decimal.", answer: "0.4" },
+                    { problem: "Convert $1.5$ to a percent.", answer: "150%" },
+                    { problem: "Write $12.5\%$ as a decimal.", answer: "0.125" },
+                    { problem: "Convert $\frac{1}{8}$ to a decimal.", answer: "0.125" },
+                    { problem: "What is $1/100$ as a percent?", answer: "1%" },
+                    { problem: "Write $0.06$ as a fraction.", answer: "6/100" },
+                    { problem: "Convert $250\%$ to a decimal.", answer: "2.5" },
+                    { problem: "What is $\frac{3}{2}$ as a percent?", answer: "150%" }
+                ]
+            },
+            '6.4B': { title: "Proportional Reasoning (Ratios)", icon: 'scale', teks: "Apply qualitative and quantitative reasoning to solve ratio problems.",
+                questions: [
+                    { problem: "Simplify the ratio $18:45$.", answer: "2:5" },
+                    { problem: "If the ratio of boys to girls is $2:3$ and there are $15$ girls, how many boys are there?", answer: "10" },
+                    { problem: "The ratio of blue to red paint is $5:2$. If you have $10 \text{ gallons}$ of blue, how much red is needed?", answer: "4" },
+                    { problem: "Write the ratio $20$ seconds to $1$ minute in simplest form.", answer: "1:3" },
+                    { problem: "If the ratio is $3:4$, and the total is $21$, what is the larger part?", answer: "12" },
+                    { problem: "Simplify $16$ out of $48$.", answer: "1:3" },
+                    { problem: "A map scale is $1 \text{ cm} = 5 \text{ km}$. A distance of $20 \text{ km}$ is how many $\text{cm}$?", answer: "4" },
+                    { problem: "If $6$ pencils cost $\$2$, how much do $18$ pencils cost?", answer: "6" },
+                    { problem: "Ratio $4:1$. Part $A$ is $12$. What is Part $B$?", answer: "3" },
+                    { problem: "Total students is $30$. Ratio of teachers to students is $1:15$. How many teachers?", answer: "2" }
+                ]
+            },
+            '6.5A': { title: "Represent Relationships", icon: 'table', teks: "Represent mathematical relationships in tables, graphs, and equations.",
+                questions: [
+                    { problem: "If $y = x - 5$, what is $y$ when $x=10$?", answer: "5" },
+                    { problem: "A taxi ride costs a $\$2$ fee plus $\$1.50$ per mile ($m$). Write the equation.", answer: "y = 1.5m + 2" },
+                    { problem: "If the input is $3$ and the output is $9$, and the rule is multiplication, what is the constant?", answer: "3" },
+                    { problem: "For the table $(0, 0), (1, 4), (2, 8)$, what is the equation?", answer: "y = 4x" },
+                    { problem: "The graph passes through $(1, 3)$ and $(2, 6)$. Is this relationship proportional? (Yes/No)", answer: "Yes" },
+                    { problem: "If $y = 3x$, what are the coordinates for $x=0$?", answer: "(0, 0)" },
+                    { problem: "If the pattern is 'add $7$', write the equation for the $n$-th term starting at $3$.", answer: "y = 7n + 3" },
+                    { problem: "The cost $C$ is always $\$10$ more than the number of books $B$. Equation?", answer: "C = B + 10" },
+                    { problem: "If $x=4$ and $y=12$, what is the constant of proportionality?", answer: "3" },
+                    { problem: "If the graph starts at $(0, 5)$ and goes up 2 units per step, what is the equation?", answer: "y = 2x + 5" }
+                ]
+            },
+            '6.6B': { title: "Independent/Dependent Quantities", icon: 'link', teks: "Determine the constant rate of change and identify independent/dependent quantities.",
+                questions: [
+                    { problem: "In $y=5x$, which variable is the dependent quantity?", answer: "y" },
+                    { problem: "The cost of tickets depends on the number of people. Which is independent?", answer: "Number of people" },
+                    { problem: "What is the constant rate of change (slope) in $y = 7x + 3$?", answer: "7" },
+                    { problem: "If the car goes $60 \text{ mph}$, what is the rate of change?", answer: "60" },
+                    { problem: "In a graph of speed vs. time, which is usually the independent variable?", answer: "Time" },
+                    { problem: "The equation is $C = 50 + 10h$. What is the rate of change per hour ($h$)?", answer: "10" },
+                    { problem: "If the total fee $T$ depends on the number of days $D$, which is dependent?", answer: "T" },
+                    { problem: "Find the unit rate for $100$ miles in $2 \text{ hours}$.", answer: "50" },
+                    { problem: "In $A=s^2$ (area of a square), is the side length $s$ independent or dependent? (Independent/Dependent)", answer: "Independent" },
+                    { problem: "If $(1, 8), (2, 16)$ is a relationship, what is the constant of proportionality?", answer: "8" }
+                ]
+            },
+            '6.7A': { title: "Equivalent Expressions (Simplify)", icon: 'function', teks: "Generate equivalent numerical expressions using order of operations.",
+                questions: [
+                    { problem: "Simplify: $3(x + 4) - x$", answer: "2x + 12" },
+                    { problem: "Factor $10a - 15b$ using the GCF.", answer: "5(2a - 3b)" },
+                    { problem: "Combine like terms: $5y + 2 - 3y + 1$", answer: "2y + 3" },
+                    { problem: "Apply the distributive property: $-2(4m - 5)$", answer: "-8m + 10" },
+                    { problem: "Simplify: $7 - (3 + 2x)$", answer: "4 - 2x" },
+                    { problem: "Factor $24w + 8$", answer: "8(3w + 1)" },
+                    { problem: "Simplify: $9p - 3p + 1$", answer: "6p + 1" },
+                    { problem: "Is $4x + 10$ equivalent to $2(2x + 5)$? (Yes/No)", answer: "Yes" },
+                    { problem: "Simplify: $-(x - 8) + 2x$", answer: "x + 8" },
+                    { problem: "Combine: $0.5k + 1.5k$", answer: "2k" }
+                ]
+            },
+            '6.7D': { title: "Inequalities (Solution Set)", icon: 'layout-list', teks: "Determine if a given value makes a one-variable, one-step inequality true.",
+                questions: [
+                    { problem: "Does $x = 5$ make $x + 2 > 8$ true? (Yes/No)", answer: "No" },
+                    { problem: "Is $y = 3$ a solution to $4y \le 12$? (Yes/No)", answer: "Yes" },
+                    { problem: "Name an integer that is a solution to $2m < 6$.", answer: "1" },
+                    { problem: "Does $p = -1$ make $p - 3 > -5$ true? (Yes/No)", answer: "Yes" },
+                    { problem: "Which is not a solution to $x \ge 4$: $3, 4, 5$.", answer: "3" },
+                    { problem: "Solve for $x$: $x + 5 < 10$.", answer: "x < 5" },
+                    { problem: "Is $k=0$ a solution to $k/2 > -1$? (Yes/No)", answer: "Yes" },
+                    { problem: "If $3w \le 9$, is $w=4$ a solution? (Yes/No)", answer: "No" },
+                    { problem: "Write the inequality for: $x$ is at least $10$.", answer: "x \ge 10" },
+                    { problem: "Does $x=2$ solve $x - 1 \ge 1$? (Yes/No)", answer: "Yes" }
+                ]
+            },
+            '6.8B': { title: "Composite Figures (Area)", icon: 'layers', teks: "Model and use formulas for the area of composite figures.",
+                questions: [
+                    { problem: "A figure is a $5 \times 10$ rectangle with a $2 \times 3$ rectangle removed. Find the area.", answer: "44" },
+                    { problem: "A shape is made of a $4 \times 4$ square and a $2 \times 4$ rectangle. Total area?", answer: "24" },
+                    { problem: "Find the area of a figure made of two $3 \times 6$ rectangles.", answer: "36" },
+                    { problem: "A triangle (base 4, height 5) is attached to a rectangle ($4 \times 6$). Total area.", answer: "34" },
+                    { problem: "What is the area of a composite figure if one part is $12$ and the other is $8$?", answer: "20" },
+                    { problem: "A $10 \times 10$ square has a $10$-unit diameter circle removed. Area of square remaining?", answer: "100" },
+                    { problem: "A figure is a square of side $6$ and a triangle of area $10$. Total area.", answer: "46" },
+                    { problem: "A $20 \text{ ft}$ by $10 \text{ ft}$ room has a $2 \text{ ft}$ by $5 \text{ ft}$ closet. Total floor area?", answer: "200" },
+                    { problem: "Find the area of a figure with areas $1.5, 2.5, 4.0$.", answer: "8" },
+                    { problem: "A $7 \times 7$ square is next to a $1 \times 7$ rectangle. What is the total area?", answer: "56" }
+                ]
+            },
+            '6.8C': { title: "Area of Trapezoids/Triangles", icon: 'pyramid', teks: "Write and solve equations for the area of trapezoids and triangles.",
+                questions: [
+                    { problem: "Area of a triangle with base $10 \text{ cm}$ and height $8 \text{ cm}$.", answer: "40" },
+                    { problem: "Area of a trapezoid with bases $4 \text{ m}$ and $6 \text{ m}$ and height $5 \text{ m}$.", answer: "25" },
+                    { problem: "If a triangle's area is $20$ and its base is $8$, what is its height?", answer: "5" },
+                    { problem: "Area of a triangle with base $4.5$ and height $6$.", answer: "13.5" },
+                    { problem: "A trapezoid has bases $7$ and $13$ and a height of $4$. Find the area.", answer: "40" },
+                    { problem: "What is the area of a right triangle with legs $5$ and $12$?", answer: "30" },
+                    { problem: "If the area of a trapezoid is $30$ and the sum of bases is $10$, what is the height?", answer: "6" },
+                    { problem: "Find the height of a triangle with area $18$ and base $9$.", answer: "4" },
+                    { problem: "Bases $15, 5$, height $2$. Area of trapezoid?", answer: "20" },
+                    { problem: "Area of a triangle with base $20$ and height $10.5$.", answer: "105" }
+                ]
+            },
+            '6.8D': { title: "Volume of Prisms", icon: 'package', teks: "Determine the volume of rectangular prisms.",
+                questions: [
+                    { problem: "Volume of a $3 \times 4 \times 5$ rectangular prism.", answer: "60" },
+                    { problem: "A cube has a side length of $4 \text{ in}$. What is the volume?", answer: "64" },
+                    { problem: "If the base area of a rectangular prism is $20 \text{ cm}^2$ and the height is $7 \text{ cm}$, what is the volume?", answer: "140" },
+                    { problem: "A prism has length $10$, width $2$, and height $1.5$. Volume?", answer: "30" },
+                    { problem: "If the volume is $100$ and the base area is $25$, what is the height?", answer: "4" },
+                    { problem: "A rectangular box is $1 \text{ ft}$ by $2 \text{ ft}$ by $3 \text{ ft}$. Volume in $\text{ft}^3$?", answer: "6" },
+                    { problem: "Volume of a prism with length $0.5$, width $10$, and height $10$.", answer: "50" },
+                    { problem: "If the volume is $210$ and the height is $7$, what is the area of the base?", answer: "30" },
+                    { problem: "A fish tank is $8 \text{ in}$ by $10 \text{ in}$ by $12 \text{ in}$. Volume?", answer: "960" },
+                    { problem: "If a cube's volume is $27$, what is its side length?", answer: "3" }
+                ]
+            },
+            '6.10A': { title: "One-Step Equations", icon: 'zap', teks: "Model and solve one-variable, one-step equations.",
+                questions: [
+                    { problem: "Solve for $x$: $x + 15 = 40$", answer: "25" },
+                    { problem: "Solve for $y$: $6y = 54$", answer: "9" },
+                    { problem: "Solve for $z$: $z - 8.5 = 12$", answer: "20.5" },
+                    { problem: "Solve for $k$: $\frac{k}{5} = 7$", answer: "35" },
+                    { problem: "Solve for $m$: $m - 7.5 = 1.5$", answer: "9" },
+                    { problem: "Solve for $p$: $10p = 105$", answer: "10.5" },
+                    { problem: "Solve for $n$: $n + \frac{1}{2} = 1\frac{1}{2}$ (Answer as an integer)", answer: "1" },
+                    { problem: "Solve for $w$: $1.5w = 7.5$", answer: "5" },
+                    { problem: "Solve for $q$: $q - (-4) = 11$", answer: "7" },
+                    { problem: "Solve for $v$: $v \div 20 = 0.5$", answer: "10" }
+                ]
+            },
+            '6.11': { title: "Coordinate Plane Graphing", icon: 'map-pin', teks: "Graph points in all four quadrants using ordered pairs.",
+                questions: [
+                    { problem: "In which quadrant is the point $(-3, 5)$?", answer: "II" },
+                    { problem: "What is the $x$-coordinate of the point $(2, -4)$?", answer: "2" },
+                    { problem: "The point $(4, 0)$ lies on which axis?", answer: "x-axis" },
+                    { problem: "If you start at $(0, 0)$, move $3$ units left and $1$ unit up. What is the coordinate?", answer: "(-3, 1)" },
+                    { problem: "The point $(-5, -2)$ is in which quadrant?", answer: "III" },
+                    { problem: "What is the distance between $(1, 2)$ and $(1, 5)$?", answer: "3" },
+                    { problem: "If $(x, y)$ has a negative $x$ and a negative $y$, which quadrant?", answer: "III" },
+                    { problem: "What is the reflection of $(3, -4)$ across the $x$-axis?", answer: "(3, 4)" },
+                    { problem: "The origin is the point...", answer: "(0, 0)" },
+                    { problem: "What is the reflection of $(-1, 2)$ across the $y$-axis?", answer: "(1, 2)" }
+                ]
+            },
+            '6.12C': { title: "Measures of Center/Spread", icon: 'trending-up', teks: "Summarize a data set using mean, median, mode, and range.",
+                questions: [
+                    { problem: "Find the mean of $5, 5, 6, 8, 9$.", answer: "6.6" },
+                    { problem: "Find the median of $10, 12, 15, 18, 20$.", answer: "15" },
+                    { problem: "Find the mode of $1, 2, 2, 3, 4, 4, 4, 5$.", answer: "4" },
+                    { problem: "Find the range of $5, 10, 3, 15$.", answer: "12" },
+                    { problem: "What is the median of $1, 2, 3, 4$?", answer: "2.5" },
+                    { problem: "The data set is $8, 8, 8$. What is the mode?", answer: "8" },
+                    { problem: "If the mean is $5$, and there are $3$ numbers, what is the sum of the numbers?", answer: "15" },
+                    { problem: "Find the range: $100, 50, 25, 75$.", answer: "75" },
+                    { problem: "The median of $2, 4, x$ is $4$. What could $x$ be?", answer: "4" },
+                    { problem: "Which measure is most affected by an outlier: mean, median, or mode?", answer: "Mean" }
+                ]
+            },
+            '6.13A': { title: "Data Sets and Summaries", icon: 'bar-chart', teks: "Interpret numerical and categorical data with bar graphs, histograms, and box plots.",
+                questions: [
+                    { problem: "Which type of graph uses quartiles to show data spread?", answer: "Box plot" },
+                    { problem: "A histogram displays the frequency of data within...", answer: "Intervals" },
+                    { problem: "What does the maximum value in a box plot represent?", answer: "Greatest value" },
+                    { problem: "A bar graph is best used for which type of data? (Numerical/Categorical)", answer: "Categorical" },
+                    { problem: "What does $Q1$ represent in a box plot? (Answer as a percent)", answer: "25%" },
+                    { problem: "If a box plot's median is near one end, is the data symmetric or skewed?", answer: "Skewed" },
+                    { problem: "Which graph shows the distribution of numerical data?", answer: "Histogram" },
+                    { problem: "In a box plot, what percent of the data is between Q1 and Q3?", answer: "50%" },
+                    { problem: "If all bars in a histogram are the same height, the data distribution is...", answer: "Uniform" },
+                    { problem: "The mean, median, and mode are measures of...", answer: "Center" }
+                ]
+            },
+            '6.14A': { title: "Checking Account", icon: 'banknote', teks: "Compare the features and costs of a checking account and debit card.",
+                questions: [
+                    { problem: "What is the main purpose of a checking account?", answer: "Day-to-day transactions" },
+                    { problem: "A debit card directly withdraws money from your...", answer: "Checking account" },
+                    { problem: "What is a fee charged for using an ATM outside your bank's network?", answer: "ATM fee" },
+                    { problem: "Is a check part of a checking account or a savings account?", answer: "Checking account" },
+                    { problem: "What happens if you use a debit card for more than you have in the account?", answer: "Overdraft" },
+                    { problem: "What is the process of comparing your bank statement to your records?", answer: "Reconciliation" },
+                    { problem: "Does a debit card use your own money or borrowed money?", answer: "Own money" },
+                    { problem: "What is the money deposited into a checking account called?", answer: "Deposit" },
+                    { problem: "What is the number that identifies your bank on a check?", answer: "Routing number" },
+                    { problem: "What document shows all transactions for a checking account over a month?", answer: "Bank statement" }
+                ]
+            },
+
+            // --- GRADE 7 (15 TEKS) ---
+            '7.2A': { title: "Rational Number Operations (Int/Dec)", icon: 'plus-minus', teks: "Extend previous knowledge of integer operations to rational numbers.",
+                questions: [
+                    { problem: "Calculate: $-10 + 4.5$", answer: "-5.5" },
+                    { problem: "Solve: $5.2 - (-3.1)$", answer: "8.3" },
+                    { problem: "Evaluate: $-0.8 \times 5$", answer: "-4" },
+                    { problem: "Divide: $-15 \div (-0.3)$", answer: "50" },
+                    { problem: "Simplify: $-1.1 + 2.2 - 3.3$", answer: "-2.2" },
+                    { problem: "What is $25 \times (-0.1)$?", answer: "-2.5" },
+                    { problem: "Solve: $-9 - 7$", answer: "-16" },
+                    { problem: "Calculate: $10 + (-10) + 5.5$", answer: "5.5" },
+                    { problem: "What is $-14.4 \div 1.2$?", answer: "-12" },
+                    { problem: "The difference between $3.7$ and $-2.3$.", answer: "6" }
+                ]
+            },
+            '7.3B': { title: "Rational Number Operations (Fractions)", icon: 'split', teks: "Add, subtract, multiply, and divide rational numbers (fractions) fluently.",
+                questions: [
+                    { problem: "Solve: $\frac{1}{2} - \frac{3}{4}$ (Answer as a fraction)", answer: "-1/4" },
+                    { problem: "Calculate: $-\frac{2}{3} \times \frac{1}{4}$ (Answer as a fraction)", answer: "-1/6" },
+                    { problem: "Evaluate: $\frac{5}{6} + \frac{1}{3}$ (Answer as a fraction)", answer: "7/6" },
+                    { problem: "Divide: $-\frac{4}{5} \div 2$ (Answer as a fraction)", answer: "-2/5" },
+                    { problem: "Simplify: $1\frac{1}{2} \times 2\frac{1}{3}$ (Answer as a fraction)", answer: "7/2" },
+                    { problem: "What is $-\frac{1}{10} + \frac{3}{10}$?", answer: "2/10" },
+                    { problem: "Solve: $4 \div (-\frac{1}{5})$", answer: "-20" },
+                    { problem: "What is the reciprocal of $-3/7$?", answer: "-7/3" },
+                    { problem: "Calculate: $\frac{1}{8} + \frac{3}{8} - \frac{2}{8}$", answer: "2/8" },
+                    { problem: "Find the product of $\frac{2}{3}$ and $6$.", answer: "4" }
+                ]
+            },
+            '7.4A': { title: "Constant Rate of Change (Slope)", icon: 'trending-up', teks: "Represent constant rates of change in mathematical and real-world problems.",
+                questions: [
+                    { problem: "A car travels $300$ miles in $5$ hours. What is the constant rate of change (mph)?", answer: "60" },
+                    { problem: "Find the slope of the line passing through $(0, 0)$ and $(4, 8)$.", answer: "2" },
+                    { problem: "The cost $C$ for $h$ hours is $C = 15h$. What is the constant rate?", answer: "15" },
+                    { problem: "A faucet drips $20 \text{ ml}$ every minute. What is the rate of change?", answer: "20" },
+                    { problem: "Find the unit rate for $\$10.50$ for $3 \text{ pounds}$.", answer: "3.50" },
+                    { problem: "What is the slope of a line passing through $(1, 5)$ and $(3, 15)$?", answer: "5" },
+                    { problem: "In the equation $y = 0.75x$, what is the constant of proportionality?", answer: "0.75" },
+                    { problem: "A table shows $(2, 10), (4, 20)$. What is the constant rate of change?", answer: "5" },
+                    { problem: "If a rate is '$\$5$ per widget,' what is the independent quantity?", answer: "Number of widgets" },
+                    { problem: "What is the rate of change in $y = x/4$?", answer: "1/4" }
+                ]
+            },
+            '7.4D': { title: "Solve Proportional Problems", icon: 'percent', teks: "Solve problems involving percent and scale factors.",
+                questions: [
+                    { problem: "What is $40\%$ of $90$?", answer: "36" },
+                    { problem: "If a shirt is $\$30$ and is on sale for $10\%$ off, what is the discount amount?", answer: "3" },
+                    { problem: "A scale model uses $1 \text{ in} = 15 \text{ ft}$. How many $\text{ft}$ is a $4 \text{ in}$ model?", answer: "60" },
+                    { problem: "If $25$ is $50\%$ of a number, what is the number?", answer: "50" },
+                    { problem: "What is the total cost of a $\$20$ item with $8\%$ sales tax?", answer: "21.60" },
+                    { problem: "If a population increases from $100$ to $120$, what is the percent increase?", answer: "20%" },
+                    { problem: "A $20\%$ tip on a $\$50$ meal is how much?", answer: "10" },
+                    { problem: "The scale factor from object $A$ to object $B$ is $2:1$. If $A$ is $10 \text{ cm}$, how long is $B$?", answer: "5" },
+                    { problem: "What is $3\%$ written as a decimal?", answer: "0.03" },
+                    { problem: "If you missed $5$ out of $25$ questions, what percent did you miss?", answer: "20%" }
+                ]
+            },
+            '7.5A': { title: "Angles (Comp/Supp)", icon: 'maximize', teks: "Represent and solve problems involving the circumference and area of circles.",
+                questions: [
+                    { problem: "What is the complementary angle to $30^\circ$?", answer: "60" },
+                    { problem: "Two angles are supplementary. If one is $110^\circ$, what is the other?", answer: "70" },
+                    { problem: "If two angles add up to $90^\circ$, they are...", answer: "Complementary" },
+                    { problem: "Two angles form a straight line. What is their sum?", answer: "180" },
+                    { problem: "An angle and its complement are equal. What is the angle measure?", answer: "45" },
+                    { problem: "Find the angle supplementary to $45^\circ$.", answer: "135" },
+                    { problem: "If $\angle A$ and $\angle B$ are complementary and $\angle A = 50^\circ$, find $\angle B$.", answer: "40" },
+                    { problem: "Angles $\angle 1$ and $\angle 2$ are vertical angles. If $\angle 1 = 60^\circ$, find $\angle 2$.", answer: "60" },
+                    { problem: "If $\angle x = 180 - 72$, what is $\angle x$?", answer: "108" },
+                    { problem: "If an angle is $10^\circ$, what is the sum of its complement and supplement?", answer: "250" }
+                ]
+            },
+            '7.6G': { title: "Probability of Simple Events", icon: 'dice', teks: "Solve problems involving the probability of simple events.",
+                questions: [
+                    { problem: "What is the probability of rolling a $3$ on a standard six-sided die? (Answer as a fraction)", answer: "1/6" },
+                    { problem: "A bag has $3$ red and $7$ blue marbles. Probability of picking a red one? (Fraction)", answer: "3/10" },
+                    { problem: "Probability of flipping a coin and getting tails.", answer: "1/2" },
+                    { problem: "A spinner has $8$ equal sections. Probability of landing on an even number? (Fraction)", answer: "4/8" },
+                    { problem: "Probability of rolling a number greater than $4$ on a standard die.", answer: "2/6" },
+                    { problem: "If $P(\text{rain}) = 0.2$, what is $P(\text{no rain})$?", answer: "0.8" },
+                    { problem: "A deck has $52$ cards. Probability of drawing a Queen.", answer: "4/52" },
+                    { problem: "You pick a number from $1$ to $10$. Probability of picking a prime number.", answer: "4/10" },
+                    { problem: "If an event has a $100\%$ chance of happening, its probability is...", answer: "1" },
+                    { problem: "The probability of an impossible event is...", answer: "0" }
+                ]
+            },
+            '7.8C': { title: "Surface Area of Prisms/Pyramids", icon: 'ruler', teks: "Model and solve problems involving the lateral and total surface area of prisms and pyramids.",
+                questions: [
+                    { problem: "Total surface area of a cube with side length $3$.", answer: "54" },
+                    { problem: "Lateral surface area of a rectangular prism: $l=5, w=3, h=10$.", answer: "160" },
+                    { problem: "Total surface area of a prism with base area $10$ and lateral area $50$.", answer: "70" },
+                    { problem: "What is the base perimeter of a square pyramid with base side $4$ and slant height $5$?", answer: "16" },
+                    { problem: "Lateral area of a prism with perimeter $20$ and height $5$.", answer: "100" },
+                    { problem: "A pyramid has a square base of $5 \times 5$. The total area of the 4 triangular sides is $60$. What is the lateral area?", answer: "60" },
+                    { problem: "Total surface area of a $2 \times 2 \times 2$ cube.", answer: "24" },
+                    { problem: "If a prism's lateral area is $30$ and the two base areas total $10$, what is the total surface area?", answer: "40" },
+                    { problem: "The base of a rectangular prism is $4 \times 6$. The lateral area is $40$. What is the height?", answer: "2" },
+                    { problem: "Which formula is $L=Ph$? (L=Lateral Area, P=Base Perimeter, h=height)", answer: "Lateral area of a prism" }
+                ]
+            },
+            '7.9A': { title: "Volume of Prisms/Pyramids", icon: 'package-open', teks: "Solve problems involving the volume of prisms and pyramids.",
+                questions: [
+                    { problem: "Volume of a rectangular prism: $l=2, w=3, h=4$.", answer: "24" },
+                    { problem: "Volume of a square pyramid with base side $6$ and height $5$. ($V = 1/3 Bh$)", answer: "60" },
+                    { problem: "The base area of a triangular prism is $15 \text{ in}^2$ and height is $10 \text{ in}$. Volume?", answer: "150" },
+                    { problem: "Volume of a $10 \times 10 \times 10$ cube.", answer: "1000" },
+                    { problem: "If a rectangular pyramid has a volume of $40$ and a base area of $10$, what is the height?", answer: "12" },
+                    { problem: "What is the ratio of the volume of a prism to a pyramid with the same base and height? (Fraction)", answer: "3/1" },
+                    { problem: "Volume of a pyramid with base area $24$ and height $3$.", answer: "24" },
+                    { problem: "A prism has volume $50$ and base area $5$. Find the height.", answer: "10" },
+                    { problem: "Find the volume of a rectangular pyramid with $l=3, w=4, h=6$.", answer: "24" },
+                    { problem: "If $V = 1/3(20)(9)$, what is $V$?", answer: "60" }
+                ]
+            },
+            '7.9B': { title: "Area & Circumference of Circles", icon: 'circle', teks: "Determine the circumference and area of circles.",
+                questions: [
+                    { problem: "Circumference of a circle with $d=8$. (Use $\pi = 3.14$)", answer: "25.12" },
+                    { problem: "Area of a circle with $r=3$. (Use $\pi = 3.14$)", answer: "28.26" },
+                    { problem: "If the radius is $10$, what is the circumference (leave as $20\pi$)?", answer: "$20\pi$" },
+                    { problem: "If the circumference is $31.4$, what is the diameter? (Use $\pi = 3.14$)", answer: "10" },
+                    { problem: "Area of a semicircle with $r=4$. (Use $\pi = 3$ for estimation)", answer: "24" },
+                    { problem: "If the area is $100\pi$, what is the radius?", answer: "10" },
+                    { problem: "Circumference if $r=1$. (Use $\pi = 3.14$)", answer: "6.28" },
+                    { problem: "If the diameter is $14$, what is the area? (Use $\pi = 22/7$)", answer: "154" },
+                    { problem: "Find the diameter if the radius is $2.5$.", answer: "5" },
+                    { problem: "What is the formula for circumference using diameter?", answer: "$C=\pi d$" }
+                ]
+            },
+            '7.10A': { title: "Model Two-Step Equations", icon: 'zap-off', teks: "Model and solve one-variable, two-step equations and inequalities.",
+                questions: [
+                    { problem: "Solve for $x$: $3x + 1 = 16$", answer: "5" },
+                    { problem: "Solve for $y$: $\frac{y}{4} - 2 = 1$", answer: "12" },
+                    { problem: "Model: $5$ less than $2$ times a number $n$ is $15$. ($2n - 5 = 15$)", answer: "10" },
+                    { problem: "Solve for $m$: $-5m + 10 = 0$", answer: "2" },
+                    { problem: "Solve for $k$: $13 = \frac{k}{2} + 7$", answer: "12" },
+                    { problem: "If $4x - 1 = 7$, what is $x$?", answer: "2" },
+                    { problem: "The cost $C$ is $\$10$ plus $\$2$ per mile ($m$). If $C=20$, what is $m$?", answer: "5" },
+                    { problem: "Solve for $w$: $1.5w + 4 = 10$", answer: "4" },
+                    { problem: "Solve for $n$: $8 - 3n = 2$", answer: "2" },
+                    { problem: "Solve for $p$: $\frac{p}{3} - 1 = -5$", answer: "-12" }
+                ]
+            },
+            '7.11A': { title: "Two-Step Equations (Problem Solving)", icon: 'clipboard-pen', teks: "Solve real-world problems using two-step equations.",
+                questions: [
+                    { problem: "A phone plan is $\$20$ fee plus $\$0.10$ per text ($t$). If the bill is $\$30$, how many texts?", answer: "100" },
+                    { problem: "John bought $3$ shirts and used a $\$5$ coupon. Total cost was $\$40$. What was the price of one shirt?", answer: "15" },
+                    { problem: "The perimeter of a rectangle is $24$. The width is $5$. Find the length ($l$). ($2l + 10 = 24$)", answer: "7" },
+                    { problem: "A plumber charges $\$50$ for a visit plus $\$35$ per hour ($h$). If the bill is $\$120$, how many hours?", answer: "2" },
+                    { problem: "I think of a number, multiply it by $4$, and subtract $6$. The result is $10$. What is the number?", answer: "4" },
+                    { problem: "Half of a number increased by $7$ is $11$. What is the number?", answer: "8" },
+                    { problem: "Mary saved $\$100$. She spends $\$15$ each week ($w$). After how many weeks will she have $\$55$ left?", answer: "3" },
+                    { problem: "The sum of three consecutive integers is $30$. What is the smallest integer?", answer: "9" },
+                    { problem: "A gym charges $\$10$ membership plus $\$5$ per class ($c$). If total cost is $\$60$, find $c$.", answer: "10" },
+                    { problem: "If $5$ times a number, minus $1$, equals $19$, what is the number?", answer: "4" }
+                ]
+            },
+            '7.11B': { title: "Two-Step Inequalities", icon: 'square-slash', teks: "Represent and solve problems using two-step inequalities.",
+                questions: [
+                    { problem: "Solve for $x$: $2x + 1 > 7$", answer: "$x > 3$" },
+                    { problem: "Solve for $y$: $\frac{y}{2} - 3 \le 1$", answer: "$y \le 8$" },
+                    { problem: "Does $x = 0$ make $-3x + 5 < 5$ true? (Yes/No)", answer: "No" },
+                    { problem: "Solve for $m$: $5m - 1 \ge 14$", answer: "$m \ge 3$" },
+                    { problem: "Write the inequality: 'Total cost is at most $\$50$ for a $\$10$ fee plus $\$4$ per item ($i$)'", answer: "$4i + 10 \le 50$" },
+                    { problem: "Solve for $k$: $-k + 7 < 10$", answer: "$k > -3$" },
+                    { problem: "If $3p + 2 \ge 8$, is $p=1$ a solution? (Yes/No)", answer: "No" },
+                    { problem: "If you need to sell $10$ more than half ($h$) the shirts, $0.5h + 10 \le 50$. Max shirts needed?", answer: "80" },
+                    { problem: "Solve for $x$: $-2x + 1 < 9$", answer: "$x > -4$" },
+                    { problem: "If $5$ less than $4$ times a number is at least $15$, write the inequality.", answer: "$4x - 5 \ge 15$" }
+                ]
+            },
+            '7.12A': { title: "Random Samples (Inference)", icon: 'area-chart', teks: "Compare two populations based on data in random samples.",
+                questions: [
+                    { problem: "What is the key characteristic of a *random* sample?", answer: "Fair chance of selection" },
+                    { problem: "If $20\%$ of a sample likes apples, how many students in a population of $500$ are predicted to like apples?", answer: "100" },
+                    { problem: "A sample of $10$ people from $1000$ students is large enough to make a good inference? (Yes/No)", answer: "No" },
+                    { problem: "What type of sample is most likely to be biased?", answer: "Convenience sample" },
+                    { problem: "If two sample means are very close, does it suggest the populations are similar or different?", answer: "Similar" },
+                    { problem: "The difference between the maximum and minimum value in a data set is the...", answer: "Range" },
+                    { problem: "A sample should be large and...", answer: "Representative" },
+                    { problem: "You ask only people leaving a football game if they like sports. Is this sample biased? (Yes/No)", answer: "Yes" },
+                    { problem: "If the range of sample $A$ is $5$ and sample $B$ is $20$, which has less variation?", answer: "Sample A" },
+                    { problem: "What does 'inference' mean in statistics?", answer: "Conclusion based on evidence" }
+                ]
+            },
+            '7.13A': { title: "Personal Financial Literacy (Interest)", icon: 'hand-coins', teks: "Calculate simple and compound interest.",
+                questions: [
+                    { problem: "Calculate the simple interest on $\$1000$ at $5\%$ for $1 \text{ year}$.", answer: "50" },
+                    { problem: "If you earn $\$20$ in simple interest on a $\$500$ loan for $1 \text{ year}$, what is the interest rate (percent)?", answer: "4%" },
+                    { problem: "Simple Interest formula: $I = P \cdot R \cdot T$. What does $P$ stand for?", answer: "Principal" },
+                    { problem: "Which type of interest is calculated on the principal *and* previously earned interest?", answer: "Compound interest" },
+                    { problem: "What is the total amount owed after $1 \text{ year}$ on a $\$100$ loan at $10\%$ simple interest?", answer: "110" },
+                    { problem: "If you compound annually, how many times a year is the interest calculated?", answer: "1" },
+                    { problem: "Simple interest on $\$200$ at $10\%$ for $2 \text{ years}$.", answer: "40" },
+                    { problem: "A $\$100$ savings bond at $5\%$ simple interest for $10 \text{ years}$. Total interest earned.", answer: "50" },
+                    { problem: "If your money is compounding monthly, what is the value of $n$ in the formula?", answer: "12" },
+                    { problem: "What is the variable for time in the simple interest formula?", answer: "T" }
+                ]
+            },
+            '7.13E': { title: "Personal Financial Literacy (Budgeting)", icon: 'wallet', teks: "Identify and explain the need for a budget.",
+                questions: [
+                    { problem: "What is the main purpose of creating a budget?", answer: "Track income and expenses" },
+                    { problem: "Money you earn is called...", answer: "Income" },
+                    { problem: "Rent and loan payments are examples of what type of expense?", answer: "Fixed expense" },
+                    { problem: "Which is usually a variable expense: food or rent?", answer: "Food" },
+                    { problem: "If your income is $\$1000$ and expenses are $\$900$, you have a budget...", answer: "Surplus" },
+                    { problem: "If your expenses are greater than your income, you have a budget...", answer: "Deficit" },
+                    { problem: "What is the money set aside for future use called?", answer: "Savings" },
+                    { problem: "What is the most important item to include in a budget?", answer: "Taxes" },
+                    { problem: "A budget helps you avoid what type of financial problem?", answer: "Debt" },
+                    { problem: "Is entertainment usually a need or a want in a budget?", answer: "Want" }
+                ]
+            },
+           
+            // --- GRADE 8 (15 TEKS) ---
+            '8.2D': { title: "Classify and Order Real Numbers", icon: 'square-root', teks: "Order a set of real numbers.",
+                questions: [
+                    { problem: "Classify $\sqrt{16}$ (Rational/Irrational)", answer: "Rational" },
+                    { problem: "Between which two integers does $\sqrt{70}$ lie?", answer: "8 and 9" },
+                    { problem: "Order from least to greatest: $\frac{1}{2}, 0.55, \sqrt{0.16}$ (Answer with commas)", answer: "0.4, 0.5, 0.55" },
+                    { problem: "Is the number $0.121212...$ rational or irrational?", answer: "Rational" },
+                    { problem: "The set of counting numbers is also known as...", answer: "Natural numbers" },
+                    { problem: "Which is greater: $3\pi$ or $9$?", answer: "$3\pi$" },
+                    { problem: "Is $\sqrt{10}$ closer to $3$ or $3.5$?", answer: "3" },
+                    { problem: "Order $\pi, 3.14, \sqrt{10}$ (L to G)", answer: "3.14, \pi, \sqrt{10}" },
+                    { problem: "What is the classification of $\frac{5}{0}$?", answer: "Undefined" },
+                    { problem: "Is $0$ an irrational number? (Yes/No)", answer: "No" }
+                ]
+            },
+            '8.3C': { title: "Scientific Notation (Operations)", icon: 'atom', teks: "Use scientific notation to represent numbers and perform operations.",
+                questions: [
+                    { problem: "Calculate: $(2 \times 10^3) \times (3 \times 10^4)$.", answer: "$6 \times 10^7$" },
+                    { problem: "Divide: $(8 \times 10^5) \div (2 \times 10^2)$.", answer: "$4 \times 10^3$" },
+                    { problem: "What is $4,000,000 \times 0.000002$ in standard form?", answer: "8" },
+                    { problem: "Calculate: $1.5 \times 10^5 + 2 \times 10^5$.", answer: "$3.5 \times 10^5$" },
+                    { problem: "Multiply: $(5 \times 10^{-2}) \times (4 \times 10^{-3})$.", answer: "$2 \times 10^{-4}$" },
+                    { problem: "Convert $1.1 \times 10^6$ to standard form.", answer: "1100000" },
+                    { problem: "Convert $0.0000003$ to scientific notation.", answer: "$3 \times 10^{-7}$" },
+                    { problem: "Is $15 \times 10^2$ proper scientific notation? (Yes/No)", answer: "No" },
+                    { problem: "What is $9 \times 10^{-1}$ as a decimal?", answer: "0.9" },
+                    { problem: "What is the exponent when multiplying $(10^5) \times (10^{-2})$?", answer: "3" }
+                ]
+            },
+            '8.4B': { title: "Proportional vs Non-Proportional", icon: 'line-chart', teks: "Distinguish between proportional and non-proportional linear relationships.",
+                questions: [
+                    { problem: "Is $y = 3x$ proportional? (Yes/No)", answer: "Yes" },
+                    { problem: "Does the graph of a proportional relationship pass through the origin? (Yes/No)", answer: "Yes" },
+                    { problem: "Is $y = 2x + 1$ proportional? (Yes/No)", answer: "No" },
+                    { problem: "If a line has a $y$-intercept of $-2$, is the relationship proportional or non-proportional?", answer: "Non-proportional" },
+                    { problem: "In a proportional relationship, the ratio $\frac{y}{x}$ is always...", answer: "Constant" },
+                    { problem: "Which equation is non-proportional: $y=5x$ or $y=5x+5$?", answer: "$y=5x+5$" },
+                    { problem: "If a relationship includes an initial fee, is it proportional? (Yes/No)", answer: "No" },
+                    { problem: "The relationship $(1, 3), (2, 6)$ is proportional. What is the constant?", answer: "3" },
+                    { problem: "Does the equation $C = 50$ (cost is constant) represent a proportional relationship? (Yes/No)", answer: "No" },
+                    { problem: "What type of function is $y=mx+b$ where $b \ne 0$?", answer: "Non-proportional" }
+                ]
+            },
+            '8.5C': { title: "Linear Relationships (Slope-Intercept)", icon: 'activity', teks: "Represent linear non-proportional relationships in various forms.",
+                questions: [
+                    { problem: "What is the slope ($m$) in $y = -5x + 2$?", answer: "-5" },
+                    { problem: "What is the $y$-intercept ($b$) in $y = 0.5x - 4$?", answer: "-4" },
+                    { problem: "Write the equation of a line with $m=2$ and $b=-1$.", answer: "$y = 2x - 1$" },
+                    { problem: "Find the slope of a line passing through $(0, 5)$ and $(1, 8)$.", answer: "3" },
+                    { problem: "The line passes through $(0, 1)$ and has a slope of $4$. Equation?", answer: "$y = 4x + 1$" },
+                    { problem: "What is the slope of the line $2y = 6x + 4$?", answer: "3" },
+                    { problem: "If a line has a $y$-intercept of $0$, is it proportional or non-proportional?", answer: "Proportional" },
+                    { problem: "What is the $y$-intercept of the line passing through $(-1, 3)$ and $(0, 5)$?", answer: "5" },
+                    { problem: "If $y=7$, what is the slope of the line?", answer: "0" },
+                    { problem: "What is the equation for a line that decreases $3$ units for every $1$ unit increase in $x$ and starts at $y=10$?", answer: "$y = -3x + 10$" }
+                ]
+            },
+            '8.5G': { title: "Total and Unit Rate (Slope)", icon: 'move-horizontal', teks: "Identify the total cost, total distance, or unit rate as the slope of a linear relationship.",
+                questions: [
+                    { problem: "In a cost equation $C=50+12h$, what does the slope ($12$) represent?", answer: "Unit rate" },
+                    { problem: "The slope of a distance (y) vs. time (x) graph represents...", answer: "Speed" },
+                    { problem: "If a graph shows total savings (y) vs. weeks (x), what does the slope mean?", answer: "Weekly savings rate" },
+                    { problem: "A line passes through $(0, 0)$ and $(5, 25)$. What is the unit rate?", answer: "5" },
+                    { problem: "In $y = 0.75x + 2$, which term represents the initial amount?", answer: "2" },
+                    { problem: "What is the slope of a line showing that the total cost is $\$5$ per mile?", answer: "5" },
+                    { problem: "If the total height $H$ is related to time $T$ by $H=2T+1$, what is the growth rate?", answer: "2" },
+                    { problem: "If a line passes through $(1, 10)$ and $(2, 20)$, the unit rate is...", answer: "10" },
+                    { problem: "What does the $y$-intercept represent in a graph of total phone cost vs. minutes used?", answer: "Base fee" },
+                    { problem: "The slope of a linear function is constant. (True/False)", answer: "True" }
+                ]
+            },
+            '8.5I': { title: "Write Linear Equations ($y=mx+b$)", icon: 'pencil', teks: "Write linear equations in the form $y=mx+b$ to model problems.",
+                questions: [
+                    { problem: "Write the equation: $m=5$, $b=3$.", answer: "$y = 5x + 3$" },
+                    { problem: "A line passes through $(0, 1)$ with $m=-2$. Equation?", answer: "$y = -2x + 1$" },
+                    { problem: "A tank starts with $10 \text{ gallons}$ and drains $2 \text{ gallons}$ per minute ($m$). Equation for gallons $G$ remaining.", answer: "$G = -2m + 10$" },
+                    { problem: "Find the equation for the table: $(0, 4), (1, 7)$.", answer: "$y = 3x + 4$" },
+                    { problem: "The line passes through $(2, 10)$ and has $b=4$. Equation?", answer: "$y = 3x + 4$" },
+                    { problem: "Write the equation of the line passing through $(0, 0)$ and $(3, 15)$.", answer: "$y = 5x$" },
+                    { problem: "A savings account starts at $\$50$ and grows by $\$10$ per week ($w$). Equation for total savings $S$.", answer: "$S = 10w + 50$" },
+                    { problem: "Find the equation if the $y$-intercept is $1$ and the slope is $1/2$.", answer: "$y = 1/2 x + 1$" },
+                    { problem: "What is $b$ if the line passes through $(1, 5)$ and has $m=4$?", answer: "1" },
+                    { problem: "The perimeter $P$ of a square with side $s$ is $P=4s$. Write in $y=mx+b$ form.", answer: "$P = 4s + 0$" }
+                ]
+            },
+            '8.7C': { title: "Pythagorean Theorem", icon: 'triangle', teks: "Use the Pythagorean theorem to solve problems and find distances on the coordinate plane.",
+                questions: [
+                    { problem: "If $a=9$ and $b=12$, what is $c$?", answer: "15" },
+                    { problem: "If $c=25$ and $a=7$, what is $b$?", answer: "24" },
+                    { problem: "Find the distance between $(1, 2)$ and $(4, 6)$ on a coordinate plane.", answer: "5" },
+                    { problem: "A ladder $13 \text{ ft}$ long is $5 \text{ ft}$ from the base of a wall. How high does it reach?", answer: "12" },
+                    { problem: "The diagonal of a square with side length $1$ is $\sqrt{2}$. (True/False)", answer: "True" },
+                    { problem: "Is a triangle with sides $8, 15, 17$ a right triangle? (Yes/No)", answer: "Yes" },
+                    { problem: "Find the distance between $(-2, -3)$ and $(4, -3)$.", answer: "6" },
+                    { problem: "What is $c$ if $a=5$ and $b=5$ (Answer as $\sqrt{50}$)?", answer: "\sqrt{50}" },
+                    { problem: "The length of a hypotenuse is $10$ and one leg is $6$. Find the other leg.", answer: "8" },
+                    { problem: "Find the distance between $(0, 0)$ and $(5, 12)$.", answer: "13" }
+                ]
+            },
+            '8.7A': { title: "3D Figures (Surface Area)", icon: 'box', teks: "Solve problems involving lateral and total surface area of cylinders and cones.",
+                questions: [
+                    { problem: "Lateral area of a cylinder: $r=3, h=10$. (Leave as $60\pi$)", answer: "$60\pi$" },
+                    { problem: "Total surface area of a cube with side $5$.", answer: "150" },
+                    { problem: "What is the formula for the lateral area of a cylinder?", answer: "$LA=2\pi rh$" },
+                    { problem: "Total area of a cylinder with base area $10\pi$ and lateral area $30\pi$.", answer: "$50\pi$" },
+                    { problem: "If a cone has a base area of $9\pi$ and a lateral area of $15\pi$. Total area?", answer: "$24\pi$" },
+                    { problem: "Lateral area of a rectangular prism with $l=2, w=3, h=5$.", answer: "50" },
+                    { problem: "The net of a cone is a circle and a...", answer: "Sector" },
+                    { problem: "Total surface area of a cylinder with $r=1, h=1$. (Answer as $4\pi$)", answer: "$4\pi$" },
+                    { problem: "If $LA=200$ and the base perimeter is $40$, what is the height of the prism?", answer: "5" },
+                    { problem: "What is the area of the circular base of a cylinder with $r=5$ (Leave as $25\pi$)?", answer: "$25\pi$" }
+                ]
+            },
+            '8.7B': { title: "Volume of Cylinders, Cones, Spheres", icon: 'globe', teks: "Solve problems involving the volume of cylinders, cones, and spheres.",
+                questions: [
+                    { problem: "Volume of a cylinder: $r=2, h=5$. (Leave as $20\pi$)", answer: "$20\pi$" },
+                    { problem: "Volume of a cone: $r=3, h=4$. ($V = 1/3 \pi r^2 h$). (Leave as $12\pi$)", answer: "$12\pi$" },
+                    { problem: "Volume of a sphere: $r=3$. ($V = 4/3 \pi r^3$). (Leave as $36\pi$)", answer: "$36\pi$" },
+                    { problem: "What is the ratio of the volume of a cone to a cylinder with the same $r$ and $h$?", answer: "1/3" },
+                    { problem: "Volume of a cylinder: $r=1, h=10$. (Leave as $10\pi$)", answer: "$10\pi$" },
+                    { problem: "If a cone has $V=10\pi$ and a cylinder has $V=30\pi$ (same base/height), is the cylinder's volume $3$ times the cone's? (Yes/No)", answer: "Yes" },
+                    { problem: "Volume of a sphere with $d=6$. (Leave as $36\pi$)", answer: "$36\pi$" },
+                    { problem: "Find the height of a cylinder with $V=50\pi$ and $r=5$.", answer: "2" },
+                    { problem: "What is the radius of a cone with $V=4\pi$ and $h=3$?", answer: "2" },
+                    { problem: "Volume of a $10 \times 10 \times 10$ cube.", answer: "1000" }
+                ]
+            },
+            '8.8D': { title: "Simple and Compound Interest", icon: 'credit-card', teks: "Use simple and compound interest formulas to solve problems.",
+                questions: [
+                    { problem: "Simple interest on $\$2000$ at $4\%$ for $3$ years.", answer: "240" },
+                    { problem: "Which yields more money for the investor: simple or compound interest?", answer: "Compound interest" },
+                    { problem: "Total amount of a loan: $\$500$ at $10\%$ simple interest for $2$ years.", answer: "600" },
+                    { problem: "What is the principal amount if $I=\$30, R=5\%, T=2$ years?", answer: "300" },
+                    { problem: "If interest is compounded semi-annually, how many times per year is interest calculated?", answer: "2" },
+                    { problem: "What type of interest is calculated only on the original principal?", answer: "Simple interest" },
+                    { problem: "Simple interest on $\$1000$ at $5\%$ for $6$ months (0.5 years).", answer: "25" },
+                    { problem: "The term for when you earn interest on interest.", answer: "Compounding" },
+                    { problem: "If the interest rate is $R=0.03$ and $T=10$ years, what is $R \times T$?", answer: "0.3" },
+                    { problem: "What is the future value of a principal of $\$1$ with $100\%$ simple interest for $1$ year?", answer: "2" }
+                ]
+            },
+            '8.10C': { title: "Transformations", icon: 'move', teks: "Explain the effect of transformations on the coordinate plane.",
+                questions: [
+                    { problem: "What are the coordinates of $(2, 3)$ after a reflection across the $x$-axis?", answer: "(2, -3)" },
+                    { problem: "What is the rule for a $90^\circ$ counter-clockwise rotation?", answer: "$(-y, x)$" },
+                    { problem: "If $(5, 1)$ becomes $(10, 2)$, what is the scale factor of the dilation?", answer: "2" },
+                    { problem: "What are the coordinates of $(-4, 0)$ after a reflection across the $y$-axis?", answer: "(4, 0)" },
+                    { problem: "A translation moves a point $3$ units right and $2$ units down. Rule?", answer: "$x+3, y-2$" },
+                    { problem: "Which transformation preserves size and shape: dilation or reflection?", answer: "Reflection" },
+                    { problem: "What is the image of $(1, 2)$ after a $180^\circ$ rotation?", answer: "(-1, -2)" },
+                    { problem: "If a shape is dilated by a factor of $0.5$, does it get larger or smaller?", answer: "Smaller" },
+                    { problem: "If $(x, y) \to (x, -y)$, what transformation occurred?", answer: "Reflection across x-axis" },
+                    { problem: "A point is translated by $(x-5, y+10)$. How many units up did it move?", answer: "10" }
+                ]
+            },
+            '8.11A': { title: "Systems of Equations (Representing)", icon: 'shuffle', teks: "Write a system of two linear equations given a verbal description.",
+                questions: [
+                    { problem: "The sum of two numbers ($x, y$) is $10$. Their difference is $2$. Write the first equation.", answer: "$x + y = 10$" },
+                    { problem: "Tickets cost $\$5$ for adults ($a$) and $\$3$ for children ($c$). Total cost is $\$26$. Write the equation.", answer: "$5a + 3c = 26$" },
+                    { problem: "One number ($x$) is $5$ more than twice another ($y$). Write the equation.", answer: "$x = 2y + 5$" },
+                    { problem: "Two lines intersect at $(1, 3)$. This point is the...", answer: "Solution" },
+                    { problem: "There are $10$ total cars and bikes ($c, b$). Total wheels is $26$. Write the equation for the total number of vehicles.", answer: "$c + b = 10$" },
+                    { problem: "Line $A$: $y=3x$. Line $B$: $y=x+4$. What is the solution's $x$-value?", answer: "2" },
+                    { problem: "A system of equations has no solution if the lines are...", answer: "Parallel" },
+                    { problem: "Total money is $\$100$. Money in $X$ is double money in $Y$. Write the first equation.", answer: "$X + Y = 100$" },
+                    { problem: "If $y=x-1$ and $y=5$, what is $x$?", answer: "6" },
+                    { problem: "The cost of $A$ and $B$ is the same. $A$ is $\$10$ flat fee. $B$ is $\$2$ per item ($i$). Write the equation for cost $C$.", answer: "$C = 10$" }
+                ]
+            },
+            '8.12G': { title: "Scatter Plots (Trends and Correlation)", icon: 'dot-chart', teks: "Identify and interpret trends and associations in scatter plots.",
+                questions: [
+                    { problem: "If the points on a scatter plot rise from left to right, the correlation is...", answer: "Positive" },
+                    { problem: "If the points on a scatter plot are random with no pattern, the correlation is...", answer: "None" },
+                    { problem: "If the $y$ value decreases as the $x$ value increases, the correlation is...", answer: "Negative" },
+                    { problem: "What is the line that best models the data on a scatter plot called?", answer: "Line of best fit" },
+                    { problem: "If a line of best fit has a positive slope, what is the correlation?", answer: "Positive" },
+                    { problem: "What type of data is displayed in a scatter plot: one variable or two variables?", answer: "Two variables" },
+                    { problem: "A cluster of points far away from the main data group is called an...", answer: "Outlier" },
+                    { problem: "As study hours increase, test scores increase. What correlation is this?", answer: "Positive" },
+                    { problem: "When interpreting a trend, you are describing the relationship between the two...", answer: "Variables" },
+                    { problem: "If the slope of the line of best fit is $-2$, the correlation is...", answer: "Negative" }
+                ]
+            },
+            '8.13A': { title: "Financial Services (Assets and Liabilities)", icon: 'balance-scale', teks: "Compare and contrast assets and liabilities.",
+                questions: [
+                    { problem: "Is a house considered an asset or a liability?", answer: "Asset" },
+                    { problem: "What is the term for a debt or financial obligation?", answer: "Liability" },
+                    { problem: "Is a car loan considered an asset or a liability?", answer: "Liability" },
+                    { problem: "What is the term for something you own that has value?", answer: "Asset" },
+                    { problem: "Is a student loan an asset or a liability?", answer: "Liability" },
+                    { problem: "Money in a savings account is an...", answer: "Asset" },
+                    { problem: "If your total assets are greater than your total liabilities, you have a positive...", answer: "Net worth" },
+                    { problem: "Is a credit card balance an asset or a liability?", answer: "Liability" },
+                    { problem: "Which decreases your net worth: asset or liability?", answer: "Liability" },
+                    { problem: "What is the formula for Net Worth?", answer: "Assets - Liabilities" }
+                ]
+            },
+            '8.13B': { title: "Financial Services (Credit History)", icon: 'file-check', teks: "Identify the purpose of a credit report and the factors that influence credit scores.",
+                questions: [
+                    { problem: "What number summarizes a person's creditworthiness?", answer: "Credit score" },
+                    { problem: "What document details your history of borrowing and repaying debt?", answer: "Credit report" },
+                    { problem: "A higher credit score means you are a lower or higher risk borrower?", answer: "Lower risk" },
+                    { problem: "What is the most important factor in calculating a credit score?", answer: "Payment history" },
+                    { problem: "What does FICO stand for (related to credit scores)?", answer: "Fair Isaac Corporation" },
+                    { problem: "Does checking your own credit score hurt it? (Yes/No)", answer: "No" },
+                    { problem: "What is the term for borrowing money to be paid back later?", answer: "Credit" },
+                    { problem: "What is the range of most credit scores (e.g., $300$ to $X$)?", answer: "850" },
+                    { problem: "Does closing an old credit card immediately raise your score? (Yes/No)", answer: "No" },
+                    { problem: "What is one item listed on a credit report?", answer: "Loan accounts" }
+                ]
+            }
+        };
+       
+        // Map TEKS IDs to their respective grades for easy look-up
+        const gradeTeksMap = {
+            6: ['6.2D', '6.3D', '6.4B', '6.5A', '6.6B', '6.7A', '6.7D', '6.8B', '6.8C', '6.8D', '6.10A', '6.11', '6.12C', '6.13A', '6.14A'],
+            7: ['7.2A', '7.3B', '7.4A', '7.4D', '7.5A', '7.6G', '7.8C', '7.9A', '7.9B', '7.10A', '7.11A', '7.11B', '7.12A', '7.13A', '7.13E'],
+            8: ['8.2D', '8.3C', '8.4B', '8.5C', '8.5G', '8.5I', '8.7C', '8.7A', '8.7B', '8.8D', '8.10C', '8.11A', '8.12G', '8.13A', '8.13B']
+        };
+
+
+        // --- Utility Functions ---
+
+        /**
+         * Persists mastery data to localStorage.
+         */
+        function saveMasteryData() {
+            localStorage.setItem('teksProgress', JSON.stringify(teksProgress));
+            localStorage.setItem('masteredTEKS', JSON.stringify(masteredTEKS));
+        }
+
+        /**
+         * Displays a temporary notification message.
+         */
+        function showMessage(message, type) {
+            messageBox.textContent = message;
+            messageBox.className = 'message-box show';
+            messageBox.classList.remove('bg-green-500', 'bg-red-500', 'bg-blue-500', 'hidden');
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-500');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-500');
+            } else {
+                 messageBox.classList.add('bg-blue-500');
+            }
+           
+            messageBox.style.display = 'block';
+
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+                setTimeout(() => {
+                    messageBox.style.display = 'none';
+                }, 300);
+            }, 2000);
+        }
+       
+        /**
+         * Normalizes user input for checking against the answer key.
+         */
+        function normalizeAnswer(answer) {
+            if (typeof answer !== 'string') answer = String(answer);
+            // Remove whitespace, convert to lower case, remove surrounding $ (for LaTeX math), and simplify common fraction formats
+            return answer.trim().toLowerCase()
+                .replace(/\s/g, '')
+                .replace(/\$/g, '')
+                .replace(/\\/g, '') // Remove backslashes for math commands (e.g., \frac)
+                .replace(/frac{1}{2}/g, '1/2') // Simplify common fraction formats
+                .replace(/pi/g, '3.14'); // Treat pi as 3.14 for numeric comparison (simplicity)
+        }
+       
+        /**
+         * Fisher-Yates shuffle algorithm for randomizing questions.
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+
+        // --- Mastery Functions (Used on Practice Page) ---
+
+        /**
+         * Updates the mastery display for the current TEKS objective.
+         */
+        function updateMasteryDisplay(teksId) {
+            const progressContainer = document.getElementById('mastery-progress');
+            const lesson = teksQuestions[teksId];
+            if (!progressContainer || !lesson) return;
+
+            const currentProgress = teksProgress[teksId] || 0;
+            const isMastered = masteredTEKS[teksId];
+
+            if (isMastered) {
+                // Display the Award Unlocked state
+                progressContainer.innerHTML = `
+                     <div class="text-center p-4 bg-yellow-100 border-4 border-yellow-400 rounded-xl">
+                        <i data-lucide="award" class="w-10 h-10 mx-auto mb-2 text-yellow-600 animate-pulse"></i>
+                        <h3 class="text-2xl font-extrabold text-yellow-800">${teksId} MASTERED!</h3>
+                        <p class="text-sm text-gray-700 font-medium">${lesson.teks}</p>
+                     </div>
+                `;
+            } else {
+                // Display the Progress Bar state
+                 progressContainer.innerHTML = `
+                    <p class="text-lg font-bold text-gray-700 mb-2 flex items-center justify-center">
+                        <i data-lucide="target" class="w-6 h-6 mr-2 text-yellow-600"></i>
+                        ${teksId} Progress: <span id="correct-count">${currentProgress}</span> / ${TEKS_MASTERY_THRESHOLD}
+                    </p>
+                    <div class="w-full bg-gray-200 rounded-full h-3">
+                        <div id="progress-bar" class="bg-yellow-500 h-3 rounded-full transition-all duration-500" style="width: ${Math.min(100, (currentProgress / TEKS_MASTERY_THRESHOLD) * 100)}%"></div>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-2 font-medium">${lesson.teks}</p>
+                `;
+            }
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the overall TEKS mastery status table.
+         */
+        function renderMasteryTracker() {
+            let trackerHtml = '<div class="mt-12 bg-white p-8 rounded-2xl shadow-xl border-t-8 border-indigo-600">';
+            trackerHtml += '<h3 class="text-3xl font-extrabold text-gray-800 mb-6 flex items-center"><i data-lucide="medal" class="w-7 h-7 mr-3 text-indigo-600"></i> TEKS Mastery Tracker</h3>';
+            trackerHtml += '<div class="space-y-6">';
+
+            Object.keys(gradeTeksMap).forEach(grade => {
+                trackerHtml += `<h4 class="text-2xl font-bold text-gray-700 mt-4 border-b-2 pb-1">Grade ${grade} Objectives (${gradeTeksMap[grade].length} TEKS)</h4>`;
+               
+                gradeTeksMap[grade].forEach(teksId => {
+                    const lesson = teksQuestions[teksId];
+                    const isMastered = masteredTEKS[teksId];
+                    const progress = teksProgress[teksId] || 0;
+                    const icon = isMastered
+                        ? '<i data-lucide="check-circle" class="w-5 h-5 text-green-500 mr-2"></i>'
+                        : '<i data-lucide="x-circle" class="w-5 h-5 text-red-500 mr-2"></i>';
+                   
+                    const progressText = isMastered
+                        ? '<span class="text-green-600 font-semibold">Mastered</span>'
+                        : `<span class="text-gray-500">${progress}/${TEKS_MASTERY_THRESHOLD} Correct</span>`;
+
+                    trackerHtml += `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg ${isMastered ? 'bg-green-50' : 'bg-gray-50'} border">
+                            <div class="flex items-center">
+                                ${icon}
+                                <div>
+                                    <span class="font-bold">${teksId}: ${lesson.title}</span>
+                                    <span class="text-sm text-gray-600 block sm:inline-block">(${lesson.teks})</span>
+                                </div>
+                            </div>
+                            <div class="mt-2 sm:mt-0 text-right">
+                                ${progressText}
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            trackerHtml += '</div>'; // End space-y-6
+            trackerHtml += `
+                <div class="mt-8 text-center">
+                    <button onclick="resetAllMastery()" class="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition font-semibold transform hover:scale-105 shadow-lg flex items-center justify-center mx-auto">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5 mr-2"></i> Reset All Mastery Data
+                    </button>
+                </div>
+            `;
+            trackerHtml += '</div>'; // End main tracker container
+
+            return trackerHtml;
+        }
+
+        /**
+         * Resets all mastery counters and data.
+         */
+        function resetAllMastery() {
+            if (confirm("Are you sure you want to reset ALL mastery progress? This cannot be undone.")) {
+                teksProgress = {};
+                masteredTEKS = {};
+                saveMasteryData();
+                showMessage("All mastery data has been reset.", "info");
+                renderHome(); // Reload home page to show updated tracker
+            }
+        }
+
+
+        // --- Quiz Functions ---
+
+        /**
+         * Renders the Final Quiz for the current grade.
+         */
+        function renderQuiz() {
+            if (currentGrade === null) return;
+            const gradeTeks = gradeTeksMap[currentGrade];
+           
+            // Collect one random question from each MASTERED TEKS objective
+            currentQuizQuestions = [];
+            gradeTeks.forEach(teksId => {
+                if (masteredTEKS[teksId]) {
+                    const pool = teksQuestions[teksId].questions;
+                    // Get a random question from the pool
+                    const randomQ = pool[Math.floor(Math.random() * pool.length)];
+                   
+                    // Format the question object for the quiz
+                    currentQuizQuestions.push({
+                        ...randomQ,
+                        id: teksId,
+                        title: teksQuestions[teksId].title,
+                        icon: teksQuestions[teksId].icon
+                    });
+                }
+            });
+
+            if (currentQuizQuestions.length === 0) {
+                 showMessage("You must master at least one TEKS objective before taking the quiz!", "error");
+                 return renderTeksSelectionPage(currentGrade);
+            }
+           
+            // Shuffle the quiz questions
+            shuffleArray(currentQuizQuestions);
+
+            currentQuizIndex = 0;
+            quizScore = 0;
+            showQuizQuestion();
+        }
+
+        /**
+         * Displays the current quiz question.
+         */
+        function showQuizQuestion() {
+            const practiceView = document.getElementById('practice-view');
+
+            if (!currentQuizQuestions || !practiceView) return;
+
+            if (currentQuizIndex >= currentQuizQuestions.length) {
+                // Quiz finished
+                const totalTeks = gradeTeksMap[currentGrade].length;
+                const masteredCount = currentQuizQuestions.length;
+               
+                practiceView.innerHTML = `
+                    <div class="text-center p-8">
+                        <i data-lucide="star" class="w-16 h-16 mx-auto mb-4 text-green-500 animate-pulse"></i>
+                        <h3 class="text-4xl font-black text-gray-800 mb-4">Quiz Complete!</h3>
+                        <p class="text-2xl font-semibold text-gray-700 mb-6">Your Score: ${quizScore} out of ${currentQuizQuestions.length}</p>
+                        <p class="text-lg text-gray-600 mb-8">You successfully tested on ${masteredCount} out of ${totalTeks} available TEKS objectives for Grade ${currentGrade}. Great job!</p>
+                        <button onclick="renderTeksSelectionPage(${currentGrade})" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition font-semibold flex items-center mx-auto shadow-lg transform hover:scale-105">
+                            <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i> Back to TEKS Selection
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            const question = currentQuizQuestions[currentQuizIndex];
+
+            // Display question structure
+            practiceView.innerHTML = `
+                 <div id="mastery-progress" class="mb-8 p-4 bg-purple-50 border-4 border-purple-300 rounded-xl shadow-inner text-center">
+                    <p class="text-xl font-extrabold text-purple-700">Final Quiz - Question ${currentQuizIndex + 1} of ${currentQuizQuestions.length}</p>
+                    <p class="text-sm text-purple-500">Reviewing: ${question.id}: ${question.title}</p>
+                </div>
+               
+                <div class="practice-content">
+                    <div class="text-center my-10">
+                        <div class="math-problem-box text-gray-900 mb-6 p-6 bg-gray-100 inline-block rounded-xl shadow-inner border-2 border-gray-200">
+                            <i data-lucide="${question.icon}" class="inline-block w-8 h-8 mr-3 text-red-500 align-middle"></i>
+                            ${question.problem}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                        <input type="text" id="quiz-answer-input" placeholder="Enter your answer" class="p-3 border-4 border-gray-300 rounded-xl focus:border-purple-500 text-xl text-center w-full sm:w-64 shadow-inner transition">
+                        <button onclick="checkQuizAnswer()" class="px-6 py-3 bg-purple-500 text-white font-extrabold rounded-xl hover:bg-purple-600 transition duration-150 w-full sm:w-auto flex items-center justify-center shadow-lg transform hover:scale-105">
+                            <i data-lucide="chevrons-right" class="w-5 h-5 mr-2"></i> Submit & Next
+                        </button>
+                    </div>
+                   
+                    <div id="feedback" class="text-center mt-6 text-xl font-bold"></div>
+                </div>
+            `;
+            lucide.createIcons();
+            document.getElementById('quiz-answer-input').focus();
+        }
+       
+        /**
+         * Checks the user's input against the correct answer for the quiz.
+         */
+        function checkQuizAnswer() {
+            const question = currentQuizQuestions[currentQuizIndex];
+            const inputElement = document.getElementById('quiz-answer-input');
+            const feedbackElement = document.getElementById('feedback');
+           
+            const userAnswer = normalizeAnswer(inputElement.value);
+            const correctAnswer = normalizeAnswer(question.answer);
+
+            feedbackElement.classList.remove('text-red-600', 'text-green-600');
+
+            if (userAnswer === correctAnswer) {
+                quizScore++;
+                feedbackElement.textContent = `✅ Correct! (${question.answer})`;
+                feedbackElement.classList.add('text-green-600');
+            } else {
+                feedbackElement.textContent = `❌ Incorrect. The answer was ${question.answer}`;
+                feedbackElement.classList.add('text-red-600');
+            }
+
+            // Move to the next question after a brief delay
+            currentQuizIndex++;
+            document.getElementById('quiz-answer-input').disabled = true;
+            setTimeout(showQuizQuestion, 1500);
+        }
+
+        // --- Practice Functions ---
+
+        /**
+         * Renders the practice session view for a specific TEKS.
+         */
+        function renderPracticeSession(teksId) {
+            currentTeksId = teksId;
+            const lesson = teksQuestions[teksId];
+            if (!lesson) return showMessage("TEKS not found.", "error");
+
+            // 1. Prepare questions: Clone the array and shuffle it
+            currentQuestions = [...lesson.questions];
+            shuffleArray(currentQuestions);
+            currentQuestionIndex = 0;
+
+            const gradeColorClass = `grade-color-${currentGrade}`;
+           
+            contentContainer.innerHTML = `
+                <div class="max-w-3xl mx-auto">
+                    <div class="${gradeColorClass} p-6 rounded-t-xl border-b-4 shadow-inner flex justify-between items-center">
+                        <h2 class="text-2xl md:text-3xl font-black text-gray-800 flex items-center">
+                            <i data-lucide="${lesson.icon}" class="w-7 h-7 mr-3"></i>
+                            TEKS ${teksId}: ${lesson.title}
+                        </h2>
+                        <button onclick="renderTeksSelectionPage(${currentGrade})" class="px-3 py-2 bg-indigo-500 text-white rounded-xl hover:bg-indigo-600 transition font-semibold text-sm shadow-md flex items-center">
+                            <i data-lucide="undo" class="w-4 h-4 mr-1"></i> Back
+                        </button>
+                    </div>
+                    <div id="practice-view" class="bg-white p-6 md:p-10 rounded-b-xl card-shadow">
+                        <!-- Mastery progress indicator container -->
+                        <div id="mastery-progress" class="mb-8 p-4 bg-yellow-50 border-4 border-yellow-300 rounded-xl shadow-inner">
+                            <!-- Content will be injected by updateMasteryDisplay() -->
+                        </div>
+                        <!-- Question content will be loaded here -->
+                    </div>
+                </div>
+            `;
+           
+            showPracticeQuestion();
+            lucide.createIcons();
+        }
+
+        /**
+         * Displays the current question in the practice session.
+         */
+        function showPracticeQuestion() {
+            const practiceView = document.getElementById('practice-view');
+           
+            // Check if all questions in the set have been used (circular practice)
+            if (currentQuestionIndex >= currentQuestions.length) {
+                // Restart from the beginning of the shuffled list
+                currentQuestionIndex = 0;
+            }
+
+            const question = currentQuestions[currentQuestionIndex];
+           
+            // Update the display with the new question
+            const progressInfo = masteredTEKS[currentTeksId] ? 'MASTERED!' : `Question ${currentQuestionIndex + 1} of ${currentQuestions.length}`;
+            updateMasteryDisplay(currentTeksId); // Ensure mastery display is fresh
+
+            const questionHtml = `
+                <div class="practice-content" data-question-index="${currentQuestionIndex}">
+                    <div class="flex justify-between items-center mb-6 border-b pb-4">
+                        <h3 class="text-2xl font-semibold text-gray-700">
+                            Practice Problem: ${progressInfo}
+                        </h3>
+                    </div>
+
+                    <div class="text-center my-10">
+                        <div class="math-problem-box text-gray-900 mb-6 p-6 bg-gray-100 inline-block rounded-xl shadow-inner border-2 border-gray-200">
+                            <i data-lucide="${teksQuestions[currentTeksId].icon}" class="inline-block w-8 h-8 mr-3 text-red-500 align-middle"></i>
+                            ${question.problem}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
+                        <input type="text" id="practice-answer-input" placeholder="Enter your answer" class="p-3 border-4 border-gray-300 rounded-xl focus:border-green-500 text-xl text-center w-full sm:w-64 shadow-inner transition">
+                        <button onclick="checkPracticeAnswer()" id="submit-btn" class="px-6 py-3 bg-green-500 text-white font-extrabold rounded-xl hover:bg-green-600 transition duration-150 w-full sm:w-auto flex items-center justify-center shadow-lg transform hover:scale-105">
+                            <i data-lucide="check" class="w-5 h-5 mr-2"></i> Submit Answer
+                        </button>
+                    </div>
+                   
+                    <div id="feedback" class="text-center mt-6 text-xl font-bold"></div>
+                </div>
+            `;
+           
+            practiceView.querySelector('.practice-content')?.remove();
+            practiceView.insertAdjacentHTML('beforeend', questionHtml);
+           
+            lucide.createIcons();
+            document.getElementById('practice-answer-input').focus();
+        }
+
+        /**
+         * Checks the user's input against the correct answer for practice session.
+         */
+        function checkPracticeAnswer() {
+            const lesson = teksQuestions[currentTeksId];
+            const question = currentQuestions[currentQuestionIndex];
+            const inputElement = document.getElementById('practice-answer-input');
+            const feedbackElement = document.getElementById('feedback');
+            const submitBtn = document.getElementById('submit-btn');
+           
+            const userAnswer = normalizeAnswer(inputElement.value);
+            const correctAnswer = normalizeAnswer(question.answer);
+
+            feedbackElement.classList.remove('text-red-600', 'text-green-600');
+            submitBtn.disabled = true;
+            inputElement.disabled = true;
+
+            if (userAnswer === correctAnswer) {
+                // 1. Update TEKS Progress
+                if (!masteredTEKS[currentTeksId]) {
+                    teksProgress[currentTeksId] = (teksProgress[currentTeksId] || 0) + 1;
+
+                    // 2. Check for Mastery Achieved
+                    if (teksProgress[currentTeksId] >= TEKS_MASTERY_THRESHOLD) {
+                        masteredTEKS[currentTeksId] = true;
+                        showMessage(`🎉 TEKS ${currentTeksId} Mastery Unlocked!`, "success");
+                    } else {
+                        showMessage("Correct! Keep going for mastery.", "success");
+                    }
+                } else {
+                     showMessage("Correct! This TEKS is already mastered.", "success");
+                }
+               
+                // 3. Save and Update Display
+                saveMasteryData();
+                feedbackElement.textContent = "🥳 Correct! Moving to the next problem.";
+                feedbackElement.classList.add('text-green-600');
+               
+                // Automatically move to the next question after a short delay
+                currentQuestionIndex++;
+                setTimeout(showPracticeQuestion, 1500);
+
+            } else {
+                feedbackElement.textContent = `❌ Incorrect. The correct answer was ${question.answer}. Try the next one!`;
+                feedbackElement.classList.add('text-red-600');
+                showMessage("Incorrect! Review the material and try again.", "error");
+
+                // Move to the next question immediately after showing the correct answer
+                currentQuestionIndex++;
+                setTimeout(showPracticeQuestion, 3000);
+            }
+        }
+
+
+        // --- Navigation and Rendering Functions ---
+
+        /**
+         * Renders the main grade selection homepage.
+         */
+        function renderHome() {
+            currentGrade = null;
+            contentContainer.innerHTML = `
+                <div class="text-center py-12">
+                    <div class="flex flex-col lg:flex-row items-center justify-center gap-8 mb-12 bg-white p-6 rounded-2xl shadow-2xl">
+                        <!-- Image Section -->
+                        <div class="w-full lg:w-1/3">
+                            <img src="${studentImageURL}"
+                                onerror="this.onerror=null; this.src='https://placehold.co/400x300/a7f3d0/059669?text=Happy+Students+Learning';"
+                                alt="Students collaborating happily on a math problem"
+                                class="rounded-xl object-cover w-full h-auto card-shadow border-4 border-indigo-200">
+                        </div>
+                        <!-- Text Section -->
+                        <div class="w-full lg:w-2/3 text-left">
+                            <h2 class="text-5xl font-black text-gray-800 mb-4">Master Middle School Math!</h2>
+                            <p class="text-xl text-gray-600 mb-6">
+                                Dive into **45 TEKS objectives** across Grades 6, 7, and 8. Select your grade to see a full list of objectives and start earning your mastery awards!
+                            </p>
+                             <p class="text-base text-gray-500 font-medium">Click on your grade level below to get started immediately.</p>
+                        </div>
+                    </div>
+                   
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                        ${Object.keys(gradeTeksMap).map(grade => `
+                            <div id="grade-${grade}-card" class="grade-color-${grade} p-8 rounded-xl border-b-8 border-r-4 card-shadow cursor-pointer hover:border-r-8 hover:border-b-[12px] transition-all duration-200" onclick="renderTeksSelectionPage(${grade})">
+                                <i data-lucide="graduation-cap" class="w-16 h-16 mx-auto mb-4 text-gray-800"></i>
+                                <h3 class="text-3xl font-extrabold text-gray-800 mb-2">Grade ${grade}</h3>
+                                <p class="text-gray-700 font-medium">${gradeTeksMap[grade].length} TEKS Objectives Available</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${renderMasteryTracker()}
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the TEKS objective selection page for the chosen grade.
+         */
+        function renderTeksSelectionPage(grade) {
+            currentGrade = grade;
+            const teksList = gradeTeksMap[grade];
+            const gradeColorClass = `grade-color-${grade}`;
+            const masteredCount = teksList.filter(teksId => masteredTEKS[teksId]).length;
+            const totalCount = teksList.length;
+
+            let objectivesHtml = teksList.map(teksId => {
+                const lesson = teksQuestions[teksId];
+                const isMastered = masteredTEKS[teksId];
+                const progress = teksProgress[teksId] || 0;
+               
+                return `
+                    <div onclick="renderPracticeSession('${teksId}')" class="bg-white p-5 rounded-xl border-l-8 ${isMastered ? 'border-green-500' : 'border-yellow-500'} card-shadow hover:bg-gray-50 cursor-pointer transition flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i data-lucide="${lesson.icon}" class="w-6 h-6 mr-4 ${isMastered ? 'text-green-600' : 'text-yellow-600'}"></i>
+                            <div>
+                                <p class="text-xl font-bold text-gray-800">${teksId}: ${lesson.title}</p>
+                                <p class="text-sm text-gray-500">${lesson.teks}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            ${isMastered ?
+                                '<span class="px-3 py-1 bg-green-100 text-green-700 font-bold rounded-full">MASTERED</span>' :
+                                `<span class="px-3 py-1 bg-yellow-100 text-yellow-700 font-bold rounded-full">${progress}/${TEKS_MASTERY_THRESHOLD}</span>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            contentContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto">
+                    <div class="${gradeColorClass} p-6 rounded-t-xl border-b-4 shadow-inner">
+                        <h2 class="text-3xl font-black text-gray-800 text-center">
+                            Grade ${grade}: Select a TEKS Objective
+                        </h2>
+                        <p class="text-lg font-semibold text-gray-700 text-center mt-2">${masteredCount} / ${totalCount} Objectives Mastered</p>
+                    </div>
+
+                    <div class="bg-white p-6 md:p-10 rounded-b-xl card-shadow mb-8">
+                        <div class="flex justify-center gap-4 mb-8">
+                            <button onclick="renderHome()" class="px-5 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition font-semibold flex items-center shadow-md">
+                                <i data-lucide="home" class="w-5 h-5 mr-2"></i> Go Home
+                            </button>
+                            <button onclick="renderQuiz()" class="px-5 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-extrabold flex items-center shadow-lg transform hover:scale-105">
+                                <i data-lucide="award" class="w-5 h-5 mr-2"></i> Start Final Quiz
+                            </button>
+                        </div>
+                        <div class="space-y-4">
+                            ${objectivesHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the Contact and Services page.
+         */
+        function renderContactPage() {
+            currentGrade = null; // Reset current grade context
+
+            contentContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto py-8">
+                    <h2 class="text-5xl font-black text-gray-800 text-center mb-10">
+                        <i data-lucide="award" class="inline-block w-10 h-10 mr-3 text-purple-600"></i>
+                        Level Up Your Math Skills!
+                    </h2>
+
+                    <!-- Image Header -->
+                    <div class="w-full mb-10">
+                        <img src="${studentImageURL}"
+                            onerror="this.onerror=null; this.src='https://placehold.co/800x250/fee2e2/ef4444?text=Tutoring+Support';"
+                            alt="Students collaborating happily on a math problem for tutoring service"
+                            class="rounded-xl object-cover w-full h-64 border-4 border-purple-300 card-shadow">
+                    </div>
+
+
+                    <!-- Tutoring Services Section -->
+                    <div class="bg-white p-8 md:p-12 rounded-xl card-shadow mb-10 border-t-8 border-purple-500">
+                        <h3 class="text-3xl font-extrabold text-gray-700 mb-4 flex items-center">
+                            <i data-lucide="user-check" class="w-7 h-7 mr-3 text-green-500"></i>
+                            Personalized Tutoring System
+                        </h3>
+                        <p class="text-gray-600 text-lg mb-6">
+                            Want more than practice? Our dedicated **1-on-1 tutoring** service is designed to give your student the focused attention they need to master challenging middle school concepts. It’s the fastest path to building confidence and achieving excellent grades.
+                        </p>
+                        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700">
+                            <li class="flex items-start">
+                                <i data-lucide="activity" class="w-5 h-5 mr-2 text-indigo-500 mt-1 flex-shrink-0"></i>
+                                <strong>Custom Focus:</strong> Targeted lessons based on specific weak points.
+                            </li>
+                            <li class="flex items-start">
+                                <i data-lucide="monitor" class="w-5 h-5 mr-2 text-indigo-500 mt-1 flex-shrink-0"></i>
+                                <strong>Virtual & Flexible:</strong> Sessions available online to fit your busy schedule.
+                            </li>
+                            <li class="flex items-start">
+                                <i data-lucide="trending-up" class="w-5 h-5 mr-2 text-indigo-500 mt-1 flex-shrink-0"></i>
+                                <strong>Confidence Boost:</strong> Strategies for exams and test anxiety reduction.
+                            </li>
+                            <li class="flex items-start">
+                                <i data-lucide="target" class="w-5 h-5 mr-2 text-indigo-500 mt-1 flex-shrink-0"></i>
+                                <strong>Grade Levels 6-8:</strong> Expert help for all curriculum topics.
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Contact Information Section -->
+                    <div class="bg-white p-8 md:p-12 rounded-xl card-shadow border-t-8 border-indigo-500">
+                        <h3 class="text-3xl font-extrabold text-gray-700 mb-6 flex items-center">
+                            <i data-lucide="phone" class="w-7 h-7 mr-3 text-indigo-500"></i>
+                            Schedule Your First Session!
+                        </h3>
+                        <p class="text-gray-600 text-lg mb-6">
+                            Call or text us today to discuss your student's needs and book a complimentary consultation.
+                        </p>
+                        <div class="text-center bg-indigo-50 p-6 rounded-xl border-4 border-indigo-200">
+                            <p class="text-2xl font-semibold text-gray-800 mb-2">Dedicated Tutoring Line:</p>
+                            <a href="tel:8059069542" class="text-6xl font-black text-blue-700 hover:text-blue-800 transition block">
+                                805-906-9542
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+            // Re-render lucide icons after injecting HTML
+            lucide.createIcons();
+        }
+
+        // --- Global Exports and Initialization ---
+        window.renderTeksSelectionPage = renderTeksSelectionPage;
+        window.renderPracticeSession = renderPracticeSession;
+        window.checkPracticeAnswer = checkPracticeAnswer;
+        window.renderQuiz = renderQuiz;
+        window.checkQuizAnswer = checkQuizAnswer;
+        window.showQuizQuestion = showQuizQuestion;
+        window.renderHome = renderHome;
+        window.renderContactPage = renderContactPage;
+        window.resetAllMastery = resetAllMastery;
+
+        // Initialize the app on page load
+        document.addEventListener('DOMContentLoaded', renderHome);
+    </script>
+</body>
+</html>
