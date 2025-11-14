@@ -155,7 +155,239 @@
   }
  }
 
- // --- Quiz functions omitted for brevity, keep your existing implementations ---
+ // Quiz question generation and logic
+ function generateQuestionForTEKS(teks) {
+  let question = {};
+  const rand = Math.floor(Math.random() * 100);
+
+  switch (teks.id) {
+   case '6.1A': // Ratios and Rates example
+    const r = (rand % 5) + 2;
+    const d = (rand % 5) + 3;
+    const totalRatio = r + d;
+    const value = (rand % 10) + 1;
+    const totalItems = totalRatio * value;
+
+    question.text = `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are a total of ${totalItems} pieces of fruit, how many apples are there?`;
+    question.correctAnswer = `${r * value}`;
+
+    const correctValue = r * value;
+    question.options = [
+     `${correctValue}`,
+     `${d * value}`,
+     `${totalItems - correctValue}`,
+     `${correctValue + d}`
+    ].sort(() => Math.random() - 0.5);
+    break;
+
+   case '6.5C': // Equations and Inequalities example
+    const x = (rand % 10) + 5;
+    const a = (rand % 5) + 2;
+    const operator = rand % 2 === 0 ? '+' : '-';
+
+    if (operator === '+') {
+     question.text = `Solve for x: x + ${a} = ${x + a}`;
+     question.correctAnswer = `${x}`;
+    } else {
+     question.text = `Solve for x: x - ${a} = ${x - a}`;
+     question.correctAnswer = `${x}`;
+    }
+
+    question.options = [
+     `${x}`,
+     `${x + 1}`,
+     `${x - 1}`,
+     `${a + x}`
+    ].sort(() => Math.random() - 0.5);
+    break;
+
+   case '7.4D': // Circle Geometry example
+    const radius = (rand % 8) + 3;
+    const diameter = radius * 2;
+    const circApprox = Math.round(diameter * 3.14);
+
+    question.text = `A circular pool has a diameter of ${diameter} meters. What is the approximate circumference? (Use π ≈ 3.14)`;
+    question.correctAnswer = `${circApprox}`;
+
+    question.options = [
+     `${circApprox}`,
+     `${Math.round(diameter * 2)}`,
+     `${Math.round(diameter * 4)}`,
+     `${Math.round(radius * 3.14)}`
+    ].sort(() => Math.random() - 0.5);
+    break;
+
+   default: // Fallback addition question
+    const num1 = (rand % 50) + 1;
+    const num2 = (rand % 50) + 1;
+    const correctSum = num1 + num2;
+
+    question.text = `What is the sum of ${num1} and ${num2}?`;
+    question.correctAnswer = `${correctSum}`;
+
+    question.options = [
+     `${correctSum}`,
+     `${num1 * num2}`,
+     `${num1 - num2}`,
+     `${correctSum + 5}`
+    ].sort(() => Math.random() - 0.5);
+  }
+  return question;
+ }
+
+ function generateMockQuestions(teksId) {
+  let teks = allTEKS.find(t => t.id === teksId);
+  if (!teks) {
+   Object.values(TEKS_DATA).some(gradeArr => {
+    const found = gradeArr.find(t => t.id === teksId);
+    if (found) {
+     teks = found;
+     return true;
+    }
+    return false;
+   });
+  }
+  if (!teks) return [];
+
+  const questions = [];
+  for (let i = 0; i < NUM_QUESTIONS; i++) {
+   const newQ = generateQuestionForTEKS(teks);
+   questions.push({
+    id: i + 1,
+    text: newQ.text,
+    options: newQ.options,
+    correctAnswer: newQ.correctAnswer,
+    isAnswered: false,
+    isCorrect: null,
+    userSelected: null
+   });
+  }
+  return questions;
+ }
+
+ function simulateStartPractice(teksId) {
+  closePracticeModal();
+  let teks = allTEKS.find(t => t.id === teksId);
+  if (!teks) {
+   Object.values(TEKS_DATA).some(gradeArr => {
+    const found = gradeArr.find(t => t.id === teksId);
+    if (found) {
+     teks = found;
+     return true;
+    }
+    return false;
+   });
+  }
+  if (!teks) {
+   showMessageBox("TEKS not found.", "error");
+   return;
+  }
+
+  selectedTEKS = teks;
+  currentQuiz.teksId = teksId;
+  currentQuiz.questions = generateMockQuestions(teksId);
+  currentQuiz.currentQuestionIndex = 0;
+  currentQuiz.score = 0;
+
+  updateProgress(teksId, 'in-progress');
+
+  currentView = 'practice';
+  showMessageBox(`Starting practice for ${teksId} with ${NUM_QUESTIONS} questions!`, 'info');
+  renderApp();
+ }
+ window.simulateStartPractice = simulateStartPractice;
+
+ // Quiz rendering and interaction
+ function renderPracticeQuiz(container) {
+  container.className = 'py-8 px-4 max-w-3xl mx-auto';
+
+  if (!currentQuiz.questions.length) {
+   container.innerHTML = `<div class="text-center text-gray-600 text-xl">No questions available for this TEKS.</div>`;
+   return;
+  }
+
+  const question = currentQuiz.questions[currentQuiz.currentQuestionIndex];
+
+  let optionsHtml = question.options.map((opt, i) => {
+   const disabled = question.isAnswered ? 'disabled' : '';
+   const selectedClass = question.userSelected === opt ? 'bg-indigo-600 text-white' : 'bg-indigo-100 hover:bg-indigo-300';
+   return `
+    <button ${disabled} onclick="selectAnswer('${opt}')" class="block w-full text-left p-3 my-2 rounded-lg font-semibold cursor-pointer transition ${selectedClass}">
+     ${opt}
+    </button>
+   `;
+  }).join('');
+
+  container.innerHTML = `
+   <div class="bg-white rounded-xl shadow-lg p-6">
+    <h2 class="text-2xl font-extrabold text-indigo-800 mb-4">Practice Quiz: ${selectedTEKS.id} - ${selectedTEKS.title}</h2>
+    <div class="text-lg mb-6">${question.text}</div>
+    <div>${optionsHtml}</div>
+
+    <div class="flex justify-between mt-6 items-center">
+     <button onclick="goToPreviousQuestion()" ${currentQuiz.currentQuestionIndex === 0 ? 'disabled' : ''} class="px-4 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+     <div>Question ${currentQuiz.currentQuestionIndex + 1} of ${currentQuiz.questions.length}</div>
+     <button onclick="goToNextQuestion()" ${currentQuiz.currentQuestionIndex === currentQuiz.questions.length - 1 ? 'disabled' : ''} class="px-4 py-2 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+    </div>
+
+    <div class="mt-6 flex justify-between items-center">
+     <div class="text-lg font-semibold">Score: ${currentQuiz.score} / ${currentQuiz.questions.length}</div>
+     <button onclick="finishQuiz()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Finish Quiz</button>
+    </div>
+   </div>
+  `;
+ }
+
+ window.renderPracticeQuiz = renderPracticeQuiz;
+
+ function selectAnswer(selectedOption) {
+  const question = currentQuiz.questions[currentQuiz.currentQuestionIndex];
+  if (question.isAnswered) return; // prevent changes after answer
+
+  question.isAnswered = true;
+  question.userSelected = selectedOption;
+  question.isCorrect = selectedOption === question.correctAnswer;
+
+  if (question.isCorrect) {
+   currentQuiz.score++;
+  }
+
+  renderApp();
+ }
+ window.selectAnswer = selectAnswer;
+
+ function goToNextQuestion() {
+  if (currentQuiz.currentQuestionIndex < currentQuiz.questions.length - 1) {
+   currentQuiz.currentQuestionIndex++;
+   renderApp();
+  }
+ }
+ window.goToNextQuestion = goToNextQuestion;
+
+ function goToPreviousQuestion() {
+  if (currentQuiz.currentQuestionIndex > 0) {
+   currentQuiz.currentQuestionIndex--;
+   renderApp();
+  }
+ }
+ window.goToPreviousQuestion = goToPreviousQuestion;
+
+ function finishQuiz() {
+  updateProgress(currentQuiz.teksId, 'finished', currentQuiz.score);
+  showMessageBox(`Quiz finished! Your score: ${currentQuiz.score} / ${currentQuiz.questions.length}`, 'success');
+  currentView = 'home';
+  selectedTEKS = null;
+  currentQuiz = {
+   teksId: null,
+   questions: [],
+   currentQuestionIndex: 0,
+   score: 0,
+  };
+  renderApp();
+ }
+ window.finishQuiz = finishQuiz;
+
+ // Existing UI functions
 
  function openPracticeModal(teks) {
   const modal = document.getElementById('practice-modal');
@@ -222,7 +454,6 @@
  }
  window.toggleGrade = toggleGrade;
 
- // Modified selectTEKS to find TEKS from Firestore data or fallback dummy data, so user can start immediately
  function selectTEKS(teksId) {
   let teks = allTEKS.find(t => t.id === teksId);
   if (!teks) {
@@ -324,7 +555,13 @@
   `;
  }
 
- // Keep your other view functions (renderPracticeQuiz, renderCurrentQuestion, renderTrackerDashboard, renderContact) as is.
+ // Placeholder functions for tracker and contact views
+ function renderTrackerDashboard(container) {
+  container.innerHTML = `<div class="text-center text-gray-600">Progress Tracker coming soon.</div>`;
+ }
+ function renderContact(container) {
+  container.innerHTML = `<div class="text-center text-gray-600">Tutoring contact info coming soon.</div>`;
+ }
 
  let messageBoxTimeout;
  function showMessageBox(message, type = 'info') {
