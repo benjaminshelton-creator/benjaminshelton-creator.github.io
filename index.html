@@ -58,6 +58,7 @@
  }
 
  function updateProgress(teksId, status, mastery = 0) {
+  // Always allow re-practice by setting status to 'in-progress' or 'finished' but don't block re-tries
   teksProgressMap.set(teksId, { status, mastery, updatedAt: Date.now() });
   saveProgress();
   showMessageBox(`Progress for ${teksId} updated to ${status}.`, 'success');
@@ -74,50 +75,176 @@
   }
  }
 
- function generateQuestionForTEKS(teks) {
-  let question = {};
-  const rand = Math.floor(Math.random() * 100);
-
-  switch (teks.id) {
-    case '6.1A':
-      {
-        const r = (rand % 5) + 2;
-        const d = (rand % 5) + 3;
-        const totalRatio = r + d;
-        const value = (rand % 10) + 1;
-        const totalItems = totalRatio * value;
-
-        question.text = `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are a total of ${totalItems} pieces of fruit, how many apples are there?`;
-        question.correctAnswer = `${r * value}`;
-
-        const correctValue = r * value;
-        question.options = [
-          `${correctValue}`,
-          `${d * value}`,
-          `${totalItems - correctValue}`,
-          `${correctValue + d}`
-        ].sort(() => Math.random() - 0.5);
-      }
-      break;
-    // Add all other cases here (omitted for brevity; use full version from previous code)
-    default:
-      {
-        const num1 = (rand % 50) + 1;
-        const num2 = (rand % 50) + 1;
-        const correctSum = num1 + num2;
-
-        question.text = `What is the sum of ${num1} and ${num2}?`;
-        question.correctAnswer = `${correctSum}`;
-
-        question.options = [
-          `${correctSum}`,
-          `${num1 * num2}`,
-          `${num1 - num2}`,
-          `${correctSum + 5}`
-        ].sort(() => Math.random() - 0.5);
-      }
+ // Unique question generators per TEKS with questions relevant to that TEKS
+ const TEKS_QUESTION_GENERATORS = {
+  '6.1A': () => {
+    const r = Math.floor(Math.random() * 4) + 2;
+    const d = Math.floor(Math.random() * 4) + 3;
+    const totalRatio = r + d;
+    const value = Math.floor(Math.random() * 10) + 1;
+    const totalItems = totalRatio * value;
+    const correctValue = r * value;
+    return {
+     text: `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are ${totalItems} fruits, how many are apples?`,
+     correctAnswer: `${correctValue}`,
+     options: [
+      `${correctValue}`,
+      `${d * value}`,
+      `${totalItems - correctValue}`,
+      `${correctValue + 1}`
+     ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '6.2A': () => {
+    const intVal = Math.floor(Math.random() * 20) - 10;
+    return {
+     text: `What is the opposite of the integer ${intVal}?`,
+     correctAnswer: `${-intVal}`,
+     options: [`${-intVal}`, `${intVal}`, `${intVal + 1}`, `${-intVal - 1}`].sort(() => Math.random() - 0.5)
+    };
+  },
+  '6.3A': () => {
+    const length = Math.floor(Math.random() * 10) + 1;
+    const width = Math.floor(Math.random() * 10) + 1;
+    const area = length * width;
+    return {
+     text: `Calculate the area of a rectangle with length ${length} and width ${width}.`,
+     correctAnswer: `${area}`,
+     options: [`${area}`, `${2 * (length + width)}`, `${area + 1}`, `${area - 1}`].sort(() => Math.random() - 0.5)
+    };
+  },
+  '6.4B': () => {
+    const inches = Math.floor(Math.random() * 20) + 1;
+    const feet = inches / 12;
+    return {
+     text: `Convert ${inches} inches to feet (round to 2 decimals).`,
+     correctAnswer: feet.toFixed(2),
+     options: [
+       feet.toFixed(2),
+       (feet + 0.5).toFixed(2),
+       (feet - 0.5).toFixed(2),
+       (feet + 1).toFixed(2)
+     ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '6.5C': () => {
+    const x = Math.floor(Math.random() * 10) + 5;
+    const a = Math.floor(Math.random() * 5) + 2;
+    const operator = Math.random() < 0.5 ? '+' : '-';
+    let text, correctAnswer;
+    if (operator === '+') {
+      text = `Solve for x: x + ${a} = ${x + a}`;
+      correctAnswer = `${x}`;
+    } else {
+      text = `Solve for x: x - ${a} = ${x - a}`;
+      correctAnswer = `${x}`;
+    }
+    return {
+      text,
+      correctAnswer,
+      options: [`${x}`, `${x + 1}`, `${x - 1}`, `${a + x}`].sort(() => Math.random() - 0.5)
+    };
+  },
+  '7.1A': () => {
+    const xVal = Math.floor(Math.random() * 10) + 1;
+    const yVal = xVal * 3;
+    return {
+      text: `If y = 3x, what is y when x = ${xVal}?`,
+      correctAnswer: `${yVal}`,
+      options: [`${yVal}`, `${xVal}`, `${yVal + 1}`, `${yVal - 1}`].sort(() => Math.random() - 0.5)
+    };
+  },
+  '7.2A': () => ({
+    text: `What is the probability of rolling a 3 on a fair six-sided die?`,
+    correctAnswer: `1/6`,
+    options: [`1/6`, `1/3`, `1/2`, `1/4`].sort(() => Math.random() - 0.5)
+  }),
+  '7.3A': () => {
+    const l = Math.floor(Math.random() * 10) + 1;
+    const w = Math.floor(Math.random() * 10) + 1;
+    const h = Math.floor(Math.random() * 10) + 1;
+    const volume = l * w * h;
+    return {
+      text: `Calculate the volume of a prism with length ${l}, width ${w}, and height ${h}.`,
+      correctAnswer: `${volume}`,
+      options: [
+        `${volume}`,
+        `${l + w + h}`,
+        `${2 * (l + w + h)}`,
+        `${l * w + w * h + l * h}`
+      ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '7.4D': () => {
+    const diameter = (Math.floor(Math.random() * 8) + 3) * 2;
+    const circApprox = Math.round(diameter * 3.14);
+    return {
+      text: `A circle has diameter ${diameter}. Approximate circumference? (π ≈ 3.14)`,
+      correctAnswer: `${circApprox}`,
+      options: [
+        `${circApprox}`,
+        `${diameter * 2}`,
+        `${circApprox + 5}`,
+        `${circApprox - 5}`
+      ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '8.1A': () => {
+    const sideA = Math.floor(Math.random() * 10) + 1;
+    const sideB = Math.floor(Math.random() * 10) + 1;
+    const hyp = Math.sqrt(sideA ** 2 + sideB ** 2).toFixed(2);
+    return {
+      text: `Find hypotenuse length for right triangle with legs ${sideA} and ${sideB} (rounded to 2 decimals).`,
+      correctAnswer: `${hyp}`,
+      options: [
+        `${hyp}`,
+        `${sideA + sideB}`,
+        `${Math.abs(sideA - sideB)}`,
+        `${(sideA * sideB).toFixed(2)}`
+      ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '8.2A': () => ({
+    text: `Which transformation moves a figure without rotating or flipping it?`,
+    correctAnswer: 'translation',
+    options: ['translation', 'rotation', 'reflection', 'dilation'].sort(() => Math.random() - 0.5)
+  }),
+  '8.3A': () => {
+    const a = Math.floor(Math.random() * 10) + 1;
+    const b = Math.floor(Math.random() * 10) + 1;
+    const x = Math.floor(Math.random() * 10) + 1;
+    const y = a * x + b;
+    return {
+      text: `Solve y = ${a}x + ${b}. What is y when x = ${x}?`,
+      correctAnswer: `${y}`,
+      options: [
+        `${y}`,
+        `${a + b + x}`,
+        `${a * b * x}`,
+        `${y + 1}`
+      ].sort(() => Math.random() - 0.5)
+    };
+  },
+  '8.4B': () => ({
+    text: `Which equation represents a function (each input has one output)?`,
+    correctAnswer: `y = 2x + 3`,
+    options: [`y = 2x + 3`, `x = y^2`, `y^2 + x^2 = 1`, `x = ±√y`].sort(() => Math.random() - 0.5)
+  }),
+  default: () => {
+    const num1 = Math.floor(Math.random() * 50) + 1;
+    const num2 = Math.floor(Math.random() * 50) + 1;
+    const correctSum = num1 + num2;
+    return {
+      text: `What is the sum of ${num1} and ${num2}?`,
+      correctAnswer: `${correctSum}`,
+      options: [`${correctSum}`, `${num1 * num2}`, `${num1 - num2}`, `${correctSum + 5}`].sort(() => Math.random() - 0.5)
+    };
   }
-  return question;
+ };
+
+ function generateQuestionForTEKS(teks) {
+  const generator = TEKS_QUESTION_GENERATORS[teks.id] || TEKS_QUESTION_GENERATORS.default;
+  return generator();
  }
 
  function generateMockQuestions(teksId) {
@@ -149,6 +276,19 @@
   return questions;
  }
 
+ function loadProgress() {
+  const stored = localStorage.getItem('teksProgressMap');
+  if (stored) {
+   try {
+    const obj = JSON.parse(stored);
+    teksProgressMap = new Map(Object.entries(obj));
+   } catch {}
+  }
+ }
+ function saveProgress() {
+  localStorage.setItem('teksProgressMap', JSON.stringify(Object.fromEntries(teksProgressMap)));
+ }
+
  function simulateStartPractice(teksId) {
   closePracticeModal();
   let teks = allTEKS.find(t => t.id === teksId);
@@ -172,6 +312,7 @@
   currentQuiz.currentQuestionIndex = 0;
   currentQuiz.score = 0;
 
+  // Mark in-progress even if finished previously to allow re-practice
   updateProgress(teksId, 'in-progress');
 
   currentView = 'practice';
@@ -275,23 +416,16 @@
   const progress = teksProgressMap.get(teks.id) || { status: 'pending', mastery: 0 };
   const isFinished = progress.status === 'finished';
 
-  let buttonContent;
-  if (isFinished) {
-   buttonContent = `
-    <div class="text-xl font-bold text-green-600">Mastery Achieved (Level ${progress.mastery}/5)</div>
-   `;
-  } else {
-   buttonContent = `
+  let buttonContent = `
     <button onclick="simulateStartPractice('${teks.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-200 flex items-center space-x-2">
      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
-     <span>Start Session</span>
+     <span>${isFinished ? 'Practice Again' : 'Start Session'}</span>
     </button>
-   `;
-  }
+  `;
 
   content.innerHTML = `
    <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg relative">
-    <button onclick="closePracticeModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition">
+    <button onclick="closePracticeModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition" aria-label="Close">
      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
     </button>
 
