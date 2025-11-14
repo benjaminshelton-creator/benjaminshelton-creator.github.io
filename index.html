@@ -155,82 +155,243 @@
   }
  }
 
- // Quiz question generation and logic
+ // Full generateQuestionForTEKS function covering every TEKS on site:
  function generateQuestionForTEKS(teks) {
   let question = {};
   const rand = Math.floor(Math.random() * 100);
 
   switch (teks.id) {
-   case '6.1A': // Ratios and Rates example
-    const r = (rand % 5) + 2;
-    const d = (rand % 5) + 3;
-    const totalRatio = r + d;
-    const value = (rand % 10) + 1;
-    const totalItems = totalRatio * value;
+    case '6.1A': // Ratios and Rates
+      {
+        const r = (rand % 5) + 2;
+        const d = (rand % 5) + 3;
+        const totalRatio = r + d;
+        const value = (rand % 10) + 1;
+        const totalItems = totalRatio * value;
 
-    question.text = `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are a total of ${totalItems} pieces of fruit, how many apples are there?`;
-    question.correctAnswer = `${r * value}`;
+        question.text = `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are a total of ${totalItems} pieces of fruit, how many apples are there?`;
+        question.correctAnswer = `${r * value}`;
 
-    const correctValue = r * value;
-    question.options = [
-     `${correctValue}`,
-     `${d * value}`,
-     `${totalItems - correctValue}`,
-     `${correctValue + d}`
-    ].sort(() => Math.random() - 0.5);
-    break;
+        const correctValue = r * value;
+        question.options = [
+          `${correctValue}`,
+          `${d * value}`,
+          `${totalItems - correctValue}`,
+          `${correctValue + d}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-   case '6.5C': // Equations and Inequalities example
-    const x = (rand % 10) + 5;
-    const a = (rand % 5) + 2;
-    const operator = rand % 2 === 0 ? '+' : '-';
+    case '6.2A': // Integers and Opposites
+      {
+        const intVal = (rand % 20) - 10; // range -10 to 9
+        question.text = `Which number is the opposite of ${intVal}?`;
+        question.correctAnswer = `${-intVal}`;
+        question.options = [
+          `${-intVal}`,
+          `${intVal}`,
+          `${intVal + 1}`,
+          `${-intVal + 1}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-    if (operator === '+') {
-     question.text = `Solve for x: x + ${a} = ${x + a}`;
-     question.correctAnswer = `${x}`;
-    } else {
-     question.text = `Solve for x: x - ${a} = ${x - a}`;
-     question.correctAnswer = `${x}`;
-    }
+    case '6.3A': // Area and Perimeter
+      {
+        const length = (rand % 10) + 1;
+        const width = (rand % 10) + 1;
+        const area = length * width;
+        const perimeter = 2 * (length + width);
+        question.text = `A rectangle has length ${length} units and width ${width} units. What is its area?`;
+        question.correctAnswer = `${area}`;
+        question.options = [
+          `${area}`,
+          `${perimeter}`,
+          `${area + 1}`,
+          `${perimeter - 1}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-    question.options = [
-     `${x}`,
-     `${x + 1}`,
-     `${x - 1}`,
-     `${a + x}`
-    ].sort(() => Math.random() - 0.5);
-    break;
+    case '6.4B': // Unit Conversion
+      {
+        const inches = (rand % 20) + 1;
+        const feet = inches / 12;
+        question.text = `Convert ${inches} inches to feet (round to 2 decimals).`;
+        question.correctAnswer = feet.toFixed(2);
+        question.options = [
+          feet.toFixed(2),
+          (feet + 1).toFixed(2),
+          (feet - 0.5).toFixed(2),
+          (feet + 0.5).toFixed(2)
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-   case '7.4D': // Circle Geometry example
-    const radius = (rand % 8) + 3;
-    const diameter = radius * 2;
-    const circApprox = Math.round(diameter * 3.14);
+    case '6.5C': // Equations and Inequalities
+      {
+        const x = (rand % 10) + 5;
+        const a = (rand % 5) + 2;
+        const operator = rand % 2 === 0 ? '+' : '-';
 
-    question.text = `A circular pool has a diameter of ${diameter} meters. What is the approximate circumference? (Use π ≈ 3.14)`;
-    question.correctAnswer = `${circApprox}`;
+        if (operator === '+') {
+          question.text = `Solve for x: x + ${a} = ${x + a}`;
+          question.correctAnswer = `${x}`;
+        } else {
+          question.text = `Solve for x: x - ${a} = ${x - a}`;
+          question.correctAnswer = `${x}`;
+        }
 
-    question.options = [
-     `${circApprox}`,
-     `${Math.round(diameter * 2)}`,
-     `${Math.round(diameter * 4)}`,
-     `${Math.round(radius * 3.14)}`
-    ].sort(() => Math.random() - 0.5);
-    break;
+        question.options = [
+          `${x}`,
+          `${x + 1}`,
+          `${x - 1}`,
+          `${a + x}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-   default: // Fallback addition question
-    const num1 = (rand % 50) + 1;
-    const num2 = (rand % 50) + 1;
-    const correctSum = num1 + num2;
+    case '7.1A': // Proportional Relationships
+      {
+        const xVal = (rand % 10) + 1;
+        const yVal = xVal * 3; // example ratio 3:1
+        question.text = `If y is proportional to x such that y = 3x, what is y when x = ${xVal}?`;
+        question.correctAnswer = `${yVal}`;
+        question.options = [
+          `${yVal}`,
+          `${xVal}`,
+          `${yVal + 1}`,
+          `${yVal - 1}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-    question.text = `What is the sum of ${num1} and ${num2}?`;
-    question.correctAnswer = `${correctSum}`;
+    case '7.2A': // Probability
+      {
+        question.text = `What is the probability of rolling a 3 on a fair six-sided die?`;
+        question.correctAnswer = `1/6`;
+        question.options = [
+          `1/6`,
+          `1/3`,
+          `1/2`,
+          `1/4`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
 
-    question.options = [
-     `${correctSum}`,
-     `${num1 * num2}`,
-     `${num1 - num2}`,
-     `${correctSum + 5}`
-    ].sort(() => Math.random() - 0.5);
+    case '7.3A': // Surface Area & Volume (rectangular prism)
+      {
+        const l = (rand % 10) + 1;
+        const w = (rand % 10) + 1;
+        const h = (rand % 10) + 1;
+        const volume = l * w * h;
+        question.text = `Calculate the volume of a rectangular prism with length ${l}, width ${w}, and height ${h}.`;
+        question.correctAnswer = `${volume}`;
+        question.options = [
+          `${volume}`,
+          `${l + w + h}`,
+          `${2 * (l + w + h)}`,
+          `${l * w + w * h + l * h}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    case '7.4D': // Circle Geometry
+      {
+        const radius = (rand % 8) + 3;
+        const diameter = radius * 2;
+        const circApprox = Math.round(diameter * 3.14);
+
+        question.text = `A circular pool has a diameter of ${diameter} meters. What is the approximate circumference? (Use π ≈ 3.14)`;
+        question.correctAnswer = `${circApprox}`;
+
+        question.options = [
+          `${circApprox}`,
+          `${Math.round(diameter * 2)}`,
+          `${Math.round(diameter * 4)}`,
+          `${Math.round(radius * 3.14)}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    case '8.1A': // Pythagorean Theorem
+      {
+        const sideA = (rand % 10) + 1;
+        const sideB = (rand % 10) + 1;
+        const hyp = Math.sqrt(sideA * sideA + sideB * sideB).toFixed(2);
+        question.text = `Find the length of the hypotenuse of a right triangle with legs ${sideA} and ${sideB}. (Round to 2 decimals)`;
+        question.correctAnswer = `${hyp}`;
+        question.options = [
+          `${hyp}`,
+          `${sideA + sideB}`,
+          `${Math.abs(sideA - sideB)}`,
+          `${(sideA * sideB).toFixed(2)}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    case '8.2A': // Transformations
+      {
+        const transformations = ['translation', 'rotation', 'reflection', 'dilation'];
+        const t = transformations[rand % transformations.length];
+        question.text = `Which transformation changes the position of a figure without rotating or flipping it?`;
+        question.correctAnswer = 'translation';
+        question.options = [
+          'translation',
+          'rotation',
+          'reflection',
+          'dilation'
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    case '8.3A': // Linear Equations
+      {
+        const a = (rand % 10) + 1;
+        const b = (rand % 10) + 1;
+        const x = (rand % 10) + 1;
+        const y = a * x + b;
+        question.text = `Solve for y: y = ${a}x + ${b}. What is y when x = ${x}?`;
+        question.correctAnswer = `${y}`;
+        question.options = [
+          `${y}`,
+          `${a + b + x}`,
+          `${a * b * x}`,
+          `${y + 1}`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    case '8.4B': // Functions
+      {
+        question.text = `Which of the following represents a function? (Each input has exactly one output.)`;
+        question.correctAnswer = `y = 2x + 3`;
+        question.options = [
+          `y = 2x + 3`,
+          `x = y^2`,
+          `y^2 + x^2 = 1`,
+          `x = ±√y`
+        ].sort(() => Math.random() - 0.5);
+      }
+      break;
+
+    default:
+      // fallback generic addition question
+      {
+        const num1 = (rand % 50) + 1;
+        const num2 = (rand % 50) + 1;
+        const correctSum = num1 + num2;
+
+        question.text = `What is the sum of ${num1} and ${num2}?`;
+        question.correctAnswer = `${correctSum}`;
+
+        question.options = [
+          `${correctSum}`,
+          `${num1 * num2}`,
+          `${num1 - num2}`,
+          `${correctSum + 5}`
+        ].sort(() => Math.random() - 0.5);
+      }
   }
   return question;
  }
@@ -297,7 +458,6 @@
  }
  window.simulateStartPractice = simulateStartPractice;
 
- // Quiz rendering and interaction
  function renderPracticeQuiz(container) {
   container.className = 'py-8 px-4 max-w-3xl mx-auto';
 
@@ -308,7 +468,7 @@
 
   const question = currentQuiz.questions[currentQuiz.currentQuestionIndex];
 
-  let optionsHtml = question.options.map((opt, i) => {
+  let optionsHtml = question.options.map((opt) => {
    const disabled = question.isAnswered ? 'disabled' : '';
    const selectedClass = question.userSelected === opt ? 'bg-indigo-600 text-white' : 'bg-indigo-100 hover:bg-indigo-300';
    return `
@@ -342,7 +502,7 @@
 
  function selectAnswer(selectedOption) {
   const question = currentQuiz.questions[currentQuiz.currentQuestionIndex];
-  if (question.isAnswered) return; // prevent changes after answer
+  if (question.isAnswered) return;
 
   question.isAnswered = true;
   question.userSelected = selectedOption;
@@ -555,7 +715,6 @@
   `;
  }
 
- // Placeholder functions for tracker and contact views
  function renderTrackerDashboard(container) {
   container.innerHTML = `<div class="text-center text-gray-600">Progress Tracker coming soon.</div>`;
  }
