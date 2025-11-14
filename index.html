@@ -155,7 +155,7 @@
   }
  }
 
- // ... (Quiz functions unchanged, omitted here for brevity; keep your existing quiz logic)
+ // --- Quiz functions omitted for brevity, keep your existing implementations ---
 
  function openPracticeModal(teks) {
   const modal = document.getElementById('practice-modal');
@@ -222,11 +222,24 @@
  }
  window.toggleGrade = toggleGrade;
 
+ // Modified selectTEKS to find TEKS from Firestore data or fallback dummy data, so user can start immediately
  function selectTEKS(teksId) {
-  const teks = allTEKS.find(t => t.id === teksId);
+  let teks = allTEKS.find(t => t.id === teksId);
+  if (!teks) {
+   Object.values(TEKS_DATA).some(gradeArr => {
+    const found = gradeArr.find(t => t.id === teksId);
+    if (found) {
+     teks = found;
+     return true;
+    }
+    return false;
+   });
+  }
   if (teks) {
    selectedTEKS = teks;
    openPracticeModal(teks);
+  } else {
+   showMessageBox("TEKS not found.", "error");
   }
  }
  window.selectTEKS = selectTEKS;
@@ -251,7 +264,6 @@
  function renderHome(container) {
   container.className = 'py-8 px-4 max-w-4xl mx-auto';
 
-  // Use allTEKS if available, else fallback to TEKS_DATA flattened
   const sourceTEKS = allTEKS.length ? allTEKS : Object.values(TEKS_DATA).flat();
 
   const sortedTEKS = sourceTEKS.reduce((acc, teks) => {
@@ -314,7 +326,6 @@
 
  // Keep your other view functions (renderPracticeQuiz, renderCurrentQuestion, renderTrackerDashboard, renderContact) as is.
 
- // Message box
  let messageBoxTimeout;
  function showMessageBox(message, type = 'info') {
   const box = document.getElementById('message-box');
