@@ -58,7 +58,6 @@
  }
 
  function updateProgress(teksId, status, mastery = 0) {
-  // Always allow re-practice by setting status to 'in-progress' or 'finished' but don't block re-tries
   teksProgressMap.set(teksId, { status, mastery, updatedAt: Date.now() });
   saveProgress();
   showMessageBox(`Progress for ${teksId} updated to ${status}.`, 'success');
@@ -75,7 +74,6 @@
   }
  }
 
- // Unique question generators per TEKS with questions relevant to that TEKS
  const TEKS_QUESTION_GENERATORS = {
   '6.1A': () => {
     const r = Math.floor(Math.random() * 4) + 2;
@@ -276,19 +274,6 @@
   return questions;
  }
 
- function loadProgress() {
-  const stored = localStorage.getItem('teksProgressMap');
-  if (stored) {
-   try {
-    const obj = JSON.parse(stored);
-    teksProgressMap = new Map(Object.entries(obj));
-   } catch {}
-  }
- }
- function saveProgress() {
-  localStorage.setItem('teksProgressMap', JSON.stringify(Object.fromEntries(teksProgressMap)));
- }
-
  function simulateStartPractice(teksId) {
   closePracticeModal();
   let teks = allTEKS.find(t => t.id === teksId);
@@ -312,7 +297,6 @@
   currentQuiz.currentQuestionIndex = 0;
   currentQuiz.score = 0;
 
-  // Mark in-progress even if finished previously to allow re-practice
   updateProgress(teksId, 'in-progress');
 
   currentView = 'practice';
@@ -643,6 +627,7 @@
 
  window.onload = () => {
   loadProgress();
+  allTEKS = Object.values(TEKS_DATA).flat(); // load TEKS on page load
   renderApp();
  };
  </script>
@@ -675,7 +660,7 @@
   </header>
 
   <div id="main-content" class="flex-grow p-6">
-   <div class="text-center p-8 text-gray-500">Loading application...</div>
+   <!-- Content renders here -->
   </div>
 
   <div id="user-id-display" class="text-xs text-gray-400 absolute bottom-1 left-1">Demo User</div>
