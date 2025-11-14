@@ -1,722 +1,795 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Math Explorer - Personalized Learning</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        /* Custom styles for fun, colorful gradients and shadows */
-        .mastered-badge {
-            background: linear-gradient(45deg, #10b981, #065f46);
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.7); }
-            50% { box-shadow: 0 0 20px rgba(5, 150, 105, 0.9); }
-        }
-        .bg-explorer {
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        }
-        .tek-card-gradient {
-            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-            transition: all 0.3s ease;
-        }
-        .tek-card-gradient:hover {
-            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
-            transform: translateY(-2px);
-        }
-    </style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>TEKS Learning Portal</title>
+ <script src="https://cdn.tailwindcss.com"></script>
+ <script type="module">
+ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+ import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+ import { getFirestore, doc, onSnapshot, collection, setDoc, query, limit, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+ import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+ // Set Firebase logging level to Debug
+ setLogLevel('Debug');
+
+ // --- GLOBAL VARIABLES & FIREBASE SETUP ---
+ const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+ const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+ const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+ const NUM_QUESTIONS = 10; // Default number of questions for practice
+
+ let app, db, auth, userId = null;
+ let currentView = 'home'; // 'home', 'tracker', 'contact', 'practice'
+ let selectedGrade = null; // Currently expanded grade on home view
+ let selectedTEKS = null; // Currently selected TEKS object
+ let teksProgressMap = new Map(); // {teksId: {status, mastery, ...}}
+ let allTEKS = []; // Array to store all TEKS data
+ 
+ let currentQuiz = {
+ teksId: null,
+ questions: [],
+ currentQuestionIndex: 0,
+ score: 0,
+ // selectedAnswer is now managed within the question object in the questions array
+ };
+
+ // --- DUMMY DATA ---
+ const TEKS_DATA = {
+ '6th Grade Math': [
+ { id: '6.1A', title: 'Ratios and Rates', grade: 6, description: 'Representing ratios and rates with concrete models, fractions, and decimals.' },
+ { id: '6.2A', title: 'Integers and Opposites', grade: 6, description: 'Locating, comparing, and ordering integers and their opposites.' },
+ { id: '6.3A', title: 'Area and Perimeter', grade: 6, description: 'Calculating the area of rectangles, parallelograms, trapezoids, and triangles.' },
+ { id: '6.4B', title: 'Unit Conversion', grade: 6, description: 'Converting between measurement systems.' },
+ { id: '6.5C', title: 'Equations and Inequalities', grade: 6, description: 'Solving one-variable, one-step equations and inequalities.' }
+ ],
+ '7th Grade Math': [
+ { id: '7.1A', title: 'Proportional Relationships', grade: 7, description: 'Applying and solving problems involving proportional relationships.' },
+ { id: '7.2A', title: 'Probability', grade: 7, description: 'Determining experimental and theoretical probability.' },
+ { id: '7.3A', title: 'Surface Area & Volume', grade: 7, description: 'Calculating surface area and volume of prisms and pyramids.' },
+ { id: '7.4D', title: 'Circle Geometry', grade: 7, description: 'Determining the circumference and area of circles.' }
+ ],
+ '8th Grade Math': [
+ { id: '8.1A', title: 'Pythagorean Theorem', grade: 8, description: 'Using the Pythagorean Theorem and its converse to solve problems.' },
+ { id: '8.2A', title: 'Transformations', grade: 8, description: 'Identifying and applying transformations including translations, rotations, and reflections.' },
+ { id: '8.3A', title: 'Linear Equations', grade: 8, description: 'Solving one-variable equations with variables on both sides.' },
+ { id: '8.4B', title: 'Functions', grade: 8, description: 'Identifying functions using graphs and tables.' }
+ ]
+ };
+
+ // --- FIREBASE INITIALIZATION AND AUTH ---
+ function initializeFirebase() {
+ try {
+ if (Object.keys(firebaseConfig).length === 0) {
+ return; // Skip if config is missing
+ }
+ app = initializeApp(firebaseConfig);
+ db = getFirestore(app);
+ auth = getAuth(app);
+ 
+ onAuthStateChanged(auth, async (user) => {
+ if (user) {
+ userId = user.uid;
+ document.getElementById('user-id-display').textContent = `User ID: ${userId}`;
+ startDataListeners();
+ } else {
+ try {
+ if (initialAuthToken) {
+ await signInWithCustomToken(auth, initialAuthToken);
+ } else {
+ await signInAnonymously(auth);
+ }
+ } catch (error) {
+ console.error("Authentication failed:", error);
+ }
+ }
+ });
+ } catch (error) {
+ console.error("Error initializing Firebase:", error);
+ }
+ }
+
+ // --- FIRESTORE LISTENERS AND PATHS ---
+ const getTEKSCollectionPath = () => `artifacts/${appId}/public/data/teks_list`;
+ const getUserProgressCollectionPath = (uid) => `artifacts/${appId}/users/${uid}/user_teks_progress`;
+
+ function startDataListeners() {
+ if (!db || !userId) return;
+
+ // 1. Listen to the main TEKS list
+ onSnapshot(collection(db, getTEKSCollectionPath()), (snapshot) => {
+ allTEKS = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+ renderApp(); 
+ }, (error) => console.error("Error fetching TEKS list:", error));
+
+ // 2. Listen to the user's progress data
+ onSnapshot(collection(db, getUserProgressCollectionPath(userId)), (snapshot) => {
+ teksProgressMap.clear();
+ snapshot.docs.forEach(doc => teksProgressMap.set(doc.id, { id: doc.id, ...doc.data() }));
+ renderApp(); 
+ }, (error) => console.error("Error fetching user progress:", error));
+ }
+
+ // --- DATA MANIPULATION FUNCTIONS ---
+ async function updateProgress(teksId, status, mastery = 0) {
+ if (!userId || !db) return console.error("User or database not ready.");
+
+ const progressRef = doc(db, getUserProgressCollectionPath(userId), teksId);
+ const data = {
+ teksId: teksId,
+ status: status,
+ updatedAt: new Date().getTime()
+ };
+
+ if (status === 'finished') {
+ data.mastery = mastery;
+ }
+
+ try {
+ await setDoc(progressRef, data, { merge: true });
+ showMessageBox(`Progress for ${teksId} updated to ${status}.`, 'success');
+ } catch (error) {
+ console.error("Error updating TEKS progress:", error);
+ showMessageBox("Error updating progress. See console.", 'error');
+ }
+ }
+
+ window.updateProgress = updateProgress;
+ 
+ window.markFinished = (teksId) => {
+ const selectElement = document.getElementById(`mastery-level-${teksId}`);
+ if (selectElement) {
+ const mastery = parseInt(selectElement.value, 10);
+ updateProgress(teksId, 'finished', mastery);
+ }
+ }
+ 
+ // --- DUMMY DATA INJECTION ---
+ async function injectDummyTEKS() {
+ if (!db) return;
+ const teksRef = collection(db, getTEKSCollectionPath());
+ const snapshot = await getDocs(query(teksRef, limit(1)));
+
+ if (snapshot.empty) {
+ console.log("Injecting dummy TEKS data...");
+ const batch = writeBatch(db);
+ Object.keys(TEKS_DATA).forEach(gradeKey => {
+ TEKS_DATA[gradeKey].forEach(teks => {
+ const docRef = doc(teksRef, teks.id);
+ batch.set(docRef, teks);
+ });
+ });
+ await batch.commit();
+ console.log("Dummy TEKS data injected successfully.");
+ }
+ }
+
+ // --- QUIZ LOGIC FUNCTIONS ---
+ 
+ function generateQuestionForTEKS(teks) {
+ let question = {};
+ const rand = Math.floor(Math.random() * 100);
+
+ switch (teks.id) {
+ case '6.1A': // Ratios and Rates
+ const r = (rand % 5) + 2; // Ratio part 1 (2-6)
+ const d = (rand % 5) + 3; // Ratio part 2 (3-7)
+ const totalRatio = r + d;
+ const value = (rand % 10) + 1;
+ const totalItems = totalRatio * value;
+
+ question.text = `A basket contains apples and oranges in a ratio of ${r}:${d}. If there are a total of ${totalItems} pieces of fruit, how many apples are there?`;
+ question.correctAnswer = `${r * value}`;
+ 
+ const correctValue = r * value;
+ question.options = [
+ `${correctValue}`, // Correct
+ `${d * value}`,
+ `${totalItems - correctValue}`,
+ `${correctValue + d}`
+ ].sort(() => Math.random() - 0.5); // Shuffle options
+ break;
+
+ case '6.5C': // Equations and Inequalities (One-step linear)
+ const x = (rand % 10) + 5;
+ const a = (rand % 5) + 2;
+ const b = a * x + (rand % 2 === 0 ? 0 : -1 * a); // Simple variation
+ const operator = rand % 2 === 0 ? '+' : '-';
+ 
+ if (operator === '+') {
+ question.text = `Solve the equation for $x$: $$x + ${a} = ${x + a}$$`;
+ question.correctAnswer = `${x}`;
+ } else {
+ question.text = `Solve the equation for $x$: $$x - ${a} = ${x - a}$$`;
+ question.correctAnswer = `${x}`;
+ }
+ 
+ question.options = [
+ `${x}`, // Correct
+ `${x + 1}`,
+ `${x - 1}`,
+ `${a + x}`
+ ].sort(() => Math.random() - 0.5);
+ break;
+ 
+ case '7.4D': // Circle Geometry (Circumference)
+ const radius = (rand % 8) + 3;
+ const diameter = radius * 2;
+ // Use simple integer answer approximation for mock
+ const circApprox = Math.round(diameter * 3.14); 
+ 
+ question.text = `A circular pool has a diameter of ${diameter} meters. What is the approximate circumference? (Use $\\pi \\approx 3.14$)`;
+ question.correctAnswer = `${circApprox}`;
+
+ const optionA = circApprox;
+ const optionB = Math.round(diameter * 2);
+ const optionC = Math.round(diameter * 4);
+ const optionD = Math.round(radius * 3.14);
+
+ question.options = [`${optionA}`, `${optionB}`, `${optionC}`, `${optionD}`].sort(() => Math.random() - 0.5);
+ break;
+
+ default: // Default/Fallback question (Addition)
+ const num1 = (rand % 50) + 1;
+ const num2 = (rand % 50) + 1;
+ const correctSum = num1 + num2;
+
+ question.text = `Fallback Question (${teks.id}): What is the sum of ${num1} and ${num2}?`;
+ question.correctAnswer = `${correctSum}`;
+ 
+ question.options = [
+ `${correctSum}`, // Correct
+ `${num1 * num2}`,
+ `${num1 - num2}`,
+ `${correctSum + 5}`
+ ].sort(() => Math.random() - 0.5);
+ }
+ return question;
+ }
+
+
+ function generateMockQuestions(teksId) {
+ const teks = allTEKS.find(t => t.id === teksId);
+ if (!teks) return [];
+
+ const questions = [];
+ for (let i = 1; i <= NUM_QUESTIONS; i++) {
+ const newQ = generateQuestionForTEKS(teks);
+ questions.push({
+ id: i,
+ text: newQ.text,
+ options: newQ.options,
+ correctAnswer: newQ.correctAnswer,
+ isAnswered: false, // New state: Has the user selected an answer?
+ isCorrect: null, // New state: Was the selected answer correct? (true/false)
+ userSelected: null // New state: What the user selected
+ });
+ }
+ return questions;
+ }
+
+ function simulateStartPractice(teksId) {
+ closePracticeModal();
+ const teks = allTEKS.find(t => t.id === teksId);
+ if (!teks) return;
+
+ // 1. Initialize Quiz State
+ selectedTEKS = teks;
+ currentQuiz.teksId = teksId;
+ currentQuiz.questions = generateMockQuestions(teksId);
+ currentQuiz.currentQuestionIndex = 0;
+ currentQuiz.score = 0;
+ updateProgress(teksId, 'in-progress'); // Update Firestore status
+
+ // 2. Switch View
+ currentView = 'practice';
+ showMessageBox(`Starting practice for ${teksId} with ${NUM_QUESTIONS} questions!`, 'info');
+ renderApp();
+ }
+ window.simulateStartPractice = simulateStartPractice;
+
+ function handleAnswerSelection(answer) {
+ const qIndex = currentQuiz.currentQuestionIndex;
+ const currentQ = currentQuiz.questions[qIndex];
+
+ // Prevent re-answering
+ if (currentQ.isAnswered) return;
+
+ currentQ.userSelected = answer;
+ currentQ.isAnswered = true;
+
+ // Check if the selected answer (string) equals the correct answer (string)
+ const isCorrect = (currentQ.userSelected === currentQ.correctAnswer);
+ currentQ.isCorrect = isCorrect;
+
+ if (isCorrect) {
+ currentQuiz.score += 1; // Gain 1 point
+ showMessageBox("Correct! +1 Point!", 'success');
+ } else {
+ currentQuiz.score -= 1; // Lose 1 point
+ showMessageBox("Incorrect. -1 Point.", 'error');
+ }
+
+ // Important: Re-render to show immediate feedback (score, highlights)
+ renderCurrentQuestion();
+ }
+ window.handleAnswerSelection = handleAnswerSelection;
+
+ function goToNextQuestion() {
+ const currentQ = currentQuiz.questions[currentQuiz.currentQuestionIndex];
+ 
+ if (!currentQ.isAnswered) {
+ showMessageBox("Please select an answer before proceeding.", 'info');
+ return;
+ }
+
+ currentQuiz.currentQuestionIndex++;
+ 
+ if (currentQuiz.currentQuestionIndex < NUM_QUESTIONS) {
+ renderCurrentQuestion();
+ } else {
+ submitQuiz(currentQuiz.teksId);
+ }
+ }
+ window.goToNextQuestion = goToNextQuestion;
+
+ function submitQuiz(teksId) {
+ const finalScore = currentQuiz.score;
+ const totalQuestions = NUM_QUESTIONS;
+ let mastery = 1; // Default low mastery (1/5)
+
+ // Mastery calculation based on score (simulated)
+ // A score of 0 or less is considered level 1
+ if (finalScore >= totalQuestions * 0.8) mastery = 5; // 8/10 or better
+ else if (finalScore >= totalQuestions * 0.6) mastery = 4; // 6/10 or better
+ else if (finalScore >= totalQuestions * 0.4) mastery = 3; // 4/10 or better
+ else if (finalScore >= totalQuestions * 0.2) mastery = 2; // 2/10 or better
+ else mastery = 1;
+ 
+ // Update Firestore
+ updateProgress(teksId, 'finished', mastery);
+ 
+ showMessageBox(`Quiz finished! Final Score: ${finalScore}. Mastery Level: ${mastery}`, 'success');
+
+ // Reset state and return to home
+ currentQuiz.teksId = null;
+ selectedTEKS = null;
+ currentView = 'home';
+ renderApp();
+ }
+ window.submitQuiz = submitQuiz;
+
+ // --- MODAL LOGIC ---
+ function openPracticeModal(teks) {
+ const modal = document.getElementById('practice-modal');
+ const content = document.getElementById('practice-modal-content');
+ const progress = teksProgressMap.get(teks.id) || { status: 'pending', mastery: 0 };
+ const isFinished = progress.status === 'finished';
+
+ let buttonContent;
+ if (isFinished) {
+ buttonContent = `
+ <div class="text-xl font-bold text-green-600">Mastery Achieved (Level ${progress.mastery}/5)</div>
+ `;
+ } else {
+ buttonContent = `
+ <button onclick="simulateStartPractice('${teks.id}')" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-200 flex items-center space-x-2">
+ <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+ <span>Start Session</span>
+ </button>
+ `;
+ }
+
+ content.innerHTML = `
+ <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-lg relative">
+ <button onclick="closePracticeModal()" class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 transition">
+ <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+ </button>
+ 
+ <h3 class="text-2xl font-extrabold text-indigo-800 mb-2">Practice Session Ready</h3>
+ <p class="text-xl text-gray-700 mb-6">You will be practicing this TEKS:</p>
+
+ <div class="bg-indigo-50 p-4 rounded-lg mb-6 border-l-4 border-indigo-500">
+ <p class="text-lg font-semibold text-gray-900">${teks.id}: ${teks.title}</p>
+ <p class="text-sm text-gray-600">${teks.description}</p>
+ </div>
+
+ <div class="flex justify-between items-center mb-6">
+ <p class="text-lg font-medium text-gray-700">Number of Questions:</p>
+ <span class="text-2xl font-extrabold text-indigo-600">${NUM_QUESTIONS}</span>
+ </div>
+
+ <div class="flex justify-end">
+ ${buttonContent}
+ </div>
+ </div>
+ `;
+ modal.classList.remove('hidden');
+ }
+
+ function closePracticeModal() {
+ document.getElementById('practice-modal').classList.add('hidden');
+ selectedTEKS = null;
+ }
+ window.closePracticeModal = closePracticeModal; 
+
+ // --- UI & RENDERING FUNCTIONS ---
+ 
+ function toggleView(view) {
+ currentView = view;
+ renderApp();
+ }
+ window.toggleView = toggleView;
+
+ function toggleGrade(grade) {
+ selectedGrade = selectedGrade === grade ? null : grade;
+ renderApp();
+ }
+ window.toggleGrade = toggleGrade;
+
+ function selectTEKS(teksId) {
+ const teks = allTEKS.find(t => t.id === teksId);
+ if (teks) {
+ selectedTEKS = teks;
+ openPracticeModal(teks);
+ }
+ }
+ window.selectTEKS = selectTEKS;
+
+ function renderApp() {
+ const container = document.getElementById('main-content');
+ container.innerHTML = '';
+ 
+ // Update nav buttons
+ document.querySelectorAll('.nav-btn').forEach(btn => {
+ btn.classList.remove('bg-indigo-700', 'text-white');
+ btn.classList.add('text-indigo-700', 'hover:bg-indigo-100');
+ });
+ document.getElementById(`btn-${currentView === 'practice' ? 'home' : currentView}`).classList.add('bg-indigo-700', 'text-white');
+ document.getElementById(`btn-${currentView === 'practice' ? 'home' : currentView}`).classList.remove('text-indigo-700', 'hover:bg-indigo-100');
+
+
+ if (currentView === 'home') return renderHome(container);
+ if (currentView === 'tracker') return renderTrackerDashboard(container);
+ if (currentView === 'contact') return renderContact(container);
+ if (currentView === 'practice') return renderPracticeQuiz(container);
+ }
+
+ // --- View 1: Home (Grade Sections) ---
+ function renderHome(container) {
+ container.className = 'py-8 px-4 max-w-4xl mx-auto';
+ const sortedTEKS = allTEKS.reduce((acc, teks) => {
+ const grade = `${teks.grade}th Grade Math`;
+ if (!acc[grade]) acc[grade] = [];
+ acc[grade].push(teks);
+ return acc;
+ }, {});
+
+ Object.keys(TEKS_DATA).forEach(gradeTitle => {
+ const teksList = sortedTEKS[gradeTitle] || [];
+ const isExpanded = selectedGrade === gradeTitle;
+ const progressCount = teksList.filter(t => teksProgressMap.has(t.id) && teksProgressMap.get(t.id).status === 'finished').length;
+ 
+ let gradeHtml = `
+ <div class="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
+ <button onclick="window.toggleGrade('${gradeTitle}')" class="w-full text-left p-6 flex justify-between items-center transition duration-200 ${isExpanded ? 'bg-indigo-50' : 'bg-white hover:bg-gray-50'}">
+ <h2 class="text-2xl font-bold text-indigo-800">${gradeTitle}</h2>
+ <span class="text-sm font-medium text-gray-500">${progressCount}/${teksList.length} Completed</span>
+ <svg class="w-6 h-6 text-indigo-500 transform ${isExpanded ? 'rotate-180' : ''} transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+ </button>
+ ${isExpanded ? renderTEKSListForGrade(teksList, gradeTitle) : ''}
+ </div>
+ `;
+ container.innerHTML += gradeHtml;
+ });
+ }
+
+ function renderTEKSListForGrade(teksList, gradeKey) {
+ return `
+ <div class="p-4 border-t border-indigo-100">
+ <ul class="space-y-3">
+ ${teksList.map(teks => {
+ const progress = teksProgressMap.get(teks.id) || { status: 'pending' };
+ const status = progress.status;
+ 
+ let statusBadge = '';
+ if (status === 'finished') {
+ statusBadge = `<span class="px-2 py-1 text-xs font-semibold text-green-700 bg-green-200 rounded-full">Done (M: ${progress.mastery})</span>`;
+ } else if (status === 'in-progress') {
+ statusBadge = `<span class="px-2 py-1 text-xs font-semibold text-yellow-700 bg-yellow-200 rounded-full">In Progress</span>`;
+ } else {
+ statusBadge = `<span class="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-200 rounded-full">Pending</span>`;
+ }
+
+ return `
+ <li onclick="window.selectTEKS('${teks.id}')" class="p-3 rounded-lg cursor-pointer flex justify-between items-center transition duration-150 ease-in-out hover:bg-indigo-100">
+ <div>
+ <p class="text-base font-semibold text-gray-800">${teks.id}: ${teks.title}</p>
+ <p class="text-sm text-gray-500">${teks.description}</p>
+ </div>
+ ${statusBadge}
+ </li>
+ `;
+ }).join('')}
+ </ul>
+ </div>
+ `;
+ }
+ 
+ // --- View 4: Practice Quiz ---
+ function renderPracticeQuiz(container) {
+ if (!currentQuiz.teksId) {
+ currentView = 'home';
+ return renderApp();
+ }
+
+ const teks = selectedTEKS;
+ const questionNumber = currentQuiz.currentQuestionIndex + 1;
+ const totalQuestions = NUM_QUESTIONS;
+ const completionPercentage = (questionNumber / totalQuestions) * 100;
+
+ container.className = 'py-8 px-4 max-w-2xl mx-auto';
+ container.innerHTML = `
+ <div class="bg-white p-6 rounded-xl shadow-xl">
+ <h2 class="text-2xl font-extrabold text-indigo-700 mb-4">${teks.id}: ${teks.title} Practice</h2>
+ 
+ <!-- Progress Bar -->
+ <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+ <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${completionPercentage}%; transition: width 0.3s;"></div>
+ </div>
+ 
+ <div id="quiz-question-container">
+ <!-- Question content will be rendered here -->
+ </div>
+ 
+ </div>
+ `;
+ renderCurrentQuestion();
+ }
+ 
+ function renderCurrentQuestion() {
+ const qContainer = document.getElementById('quiz-question-container');
+ if (!qContainer) return; // Should only happen if renderPracticeQuiz hasn't run yet
+
+ const qIndex = currentQuiz.currentQuestionIndex;
+ const question = currentQuiz.questions[qIndex];
+ const isLastQuestion = qIndex === NUM_QUESTIONS - 1;
+
+ const nextButtonText = isLastQuestion ? 'Submit Quiz' : 'Next Question';
+ const nextButtonAction = 'window.goToNextQuestion()';
+ 
+ const isAnswered = question.isAnswered;
+ const isCorrect = question.isCorrect;
+ const isButtonEnabled = isAnswered;
+
+ qContainer.innerHTML = `
+ <div class="mb-6">
+ <p class="text-lg font-semibold text-indigo-600 mb-2">Question ${qIndex + 1} of ${NUM_QUESTIONS}</p>
+ <p class="text-xl font-medium text-gray-800">${question.text}</p>
+ 
+ <!-- Immediate Feedback Box -->
+ ${isAnswered ? `
+ <div class="mt-4 p-3 rounded-lg font-bold text-center text-xl shadow-md ${isCorrect ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-red-100 text-red-700 border-2 border-red-500'}">
+ ${isCorrect ? '🎉 Correct Answer! +1 Point.' : `❌ Incorrect Answer. -1 Point. The correct answer was: ${question.correctAnswer}`}
+ </div>
+ ` : ''}
+ </div>
+
+ <div class="space-y-3 mb-8">
+ ${question.options.map(option => {
+ const isSelected = question.userSelected === option;
+ const isCorrectOption = question.correctAnswer === option;
+ 
+ let buttonClasses = 'bg-white hover:bg-gray-50 border-gray-300';
+ let onClick = isAnswered ? '' : `window.handleAnswerSelection('${option.replace(/'/g, "\\'")}')`;
+ let cursor = isAnswered ? 'cursor-default' : 'cursor-pointer';
+
+ // Logic for highlighting after answer is selected
+ if (isAnswered) {
+ if (isCorrectOption) {
+ // Highlight correct answer green
+ buttonClasses = 'bg-green-100 border-green-500 shadow-md ring-2 ring-green-500 text-green-800 font-bold';
+ } else if (isSelected && !isCorrectOption) {
+ // Highlight user's incorrect choice red
+ buttonClasses = 'bg-red-100 border-red-500 shadow-md ring-2 ring-red-500 text-red-800 font-bold line-through';
+ } else {
+ // Default look for unselected wrong options
+ buttonClasses = 'bg-gray-50 border-gray-200 text-gray-500';
+ }
+ } else if (isSelected) {
+ // Highlight user's selection blue BEFORE checking
+ buttonClasses = 'bg-indigo-200 border-indigo-500 shadow-md ring-2 ring-indigo-500';
+ }
+ 
+ return `
+ <button 
+ onclick="${onClick}" 
+ ${isAnswered ? 'disabled' : ''}
+ class="w-full text-left p-4 border rounded-lg transition duration-150 ease-in-out ${buttonClasses} ${cursor}">
+ ${option}
+ </button>
+ `;
+ }).join('')}
+ </div>
+
+ <div class="flex justify-between items-center pt-4 border-t border-gray-100">
+ <span class="text-md font-semibold text-gray-600">Current Score: 
+ <span class="${currentQuiz.score >= 0 ? 'text-green-600' : 'text-red-600'} font-extrabold text-lg">
+ ${currentQuiz.score}
+ </span>
+ </span>
+ <button 
+ onclick="${nextButtonAction}" 
+ ${isButtonEnabled ? '' : 'disabled'}
+ class="px-6 py-3 rounded-lg font-bold transition duration-200 
+ ${isButtonEnabled ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}"
+ >
+ ${nextButtonText}
+ </button>
+ </div>
+ `;
+ }
+
+ // --- View 2: Progress Tracker (No changes needed) ---
+ function renderTrackerDashboard(container) {
+ container.className = 'py-8 px-4 max-w-6xl mx-auto';
+ const progressData = allTEKS.map(teks => ({
+ ...teks,
+ ...teksProgressMap.get(teks.id)
+ })).sort((a, b) => a.grade - b.grade); 
+
+ const total = progressData.length;
+ const finished = progressData.filter(p => p.status === 'finished').length;
+ const inProgress = progressData.filter(p => p.status === 'in-progress').length;
+ const completionPercentage = total > 0 ? ((finished / total) * 100).toFixed(1) : 0;
+ const averageMastery = finished > 0 ? (progressData.filter(p => p.status === 'finished').reduce((sum, p) => sum + p.mastery, 0) / finished).toFixed(2) : 0;
+
+ container.innerHTML = `
+ <h2 class="text-3xl font-extrabold text-indigo-800 mb-6 text-center">Your Progress Tracker</h2>
+ <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+ <div class="bg-white p-4 rounded-xl shadow-md border-b-4 border-indigo-500 text-center"><p class="text-sm text-gray-500">Total TEKS</p><p class="text-2xl font-bold">${total}</p></div>
+ <div class="bg-white p-4 rounded-xl shadow-md border-b-4 border-green-500 text-center"><p class="text-sm text-gray-500">Completed</p><p class="text-2xl font-bold text-green-600">${finished} (${completionPercentage}%)</p></div>
+ <div class="bg-white p-4 rounded-xl shadow-md border-b-4 border-yellow-500 text-center"><p class="text-sm text-gray-500">In Progress</p><p class="text-2xl font-bold text-yellow-600">${inProgress}</p></div>
+ <div class="bg-white p-4 rounded-xl shadow-md border-b-4 border-gray-500 text-center"><p class="text-sm text-gray-500">Avg. Mastery</p><p class="text-2xl font-bold">${averageMastery} / 5</p></div>
+ </div>
+ 
+ <div class="bg-white p-6 rounded-xl shadow-xl overflow-x-auto">
+ <table class="min-w-full divide-y divide-gray-200">
+ <thead class="bg-gray-50">
+ <tr>
+ <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TEKS ID</th>
+ <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+ <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+ <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mastery</th>
+ <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+ </tr>
+ </thead>
+ <tbody class="bg-white divide-y divide-gray-200">
+ ${progressData.map(p => {
+ const status = p.status || 'pending';
+ let statusClass = 'bg-gray-100 text-gray-800';
+ if (status === 'finished') statusClass = 'bg-green-100 text-green-800';
+ if (status === 'in-progress') statusClass = 'bg-yellow-100 text-yellow-800';
+
+ return `
+ <tr>
+ <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.id}</td>
+ <td class="px-4 py-4 whitespace-nowrap text-sm text-indigo-600">${p.grade}th</td>
+ <td class="px-4 py-4 whitespace-nowrap">
+ <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">${status.toUpperCase().replace('-', ' ')}</span>
+ </td>
+ <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${status === 'finished' ? `${p.mastery}/5` : 'N/A'}</td>
+ <td class="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">${p.title}</td>
+ </tr>
+ `;
+ }).join('')}
+ </tbody>
+ </table>
+ </div>
+ `;
+ }
+
+ // --- View 3: Contact & Tutoring (No changes needed) ---
+ function renderContact(container) {
+ container.className = 'py-8 px-4 max-w-xl mx-auto';
+ const randomPhoneNumber = `(800) 555-${Math.floor(Math.random() * 9000) + 1000}`;
+
+ container.innerHTML = `
+ <div class="bg-white p-8 rounded-xl shadow-xl text-center">
+ <h2 class="text-3xl font-extrabold text-indigo-800 mb-4">Tutoring & Contact Information</h2>
+ <p class="text-lg text-gray-600 mb-8">Ready to boost your math skills? Sign up for one-on-one tutoring today!</p>
+ 
+ <div class="space-y-4 mb-8">
+ <div class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500 shadow-sm">
+ <p class="text-xl font-semibold text-gray-800">1 Hour Session</p>
+ <p class="text-3xl font-extrabold text-indigo-600">$15</p>
+ </div>
+ <div class="bg-indigo-50 p-4 rounded-lg border-l-4 border-indigo-500 shadow-sm">
+ <p class="text-xl font-semibold text-gray-800">2 Hour Session</p>
+ <p class="text-3xl font-extrabold text-indigo-600">$25</p>
+ </div>
+ </div>
+
+ <p class="text-xl font-semibold text-gray-700 mb-2">To Sign Up:</p>
+ <a href="tel:${randomPhoneNumber.replace(/[() -]/g, '')}" class="inline-block text-2xl font-extrabold text-green-600 bg-green-100 p-3 rounded-xl hover:bg-green-200 transition duration-200">${randomPhoneNumber}</a>
+ <p class="text-sm text-gray-500 mt-2">(Call this random number to schedule)</p>
+ </div>
+ `;
+ }
+
+ // --- MESSAGE BOX FUNCTION ---
+ let messageBoxTimeout;
+ function showMessageBox(message, type = 'info') {
+ const box = document.getElementById('message-box');
+ let bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+ 
+ box.textContent = message;
+ box.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-2xl transition-opacity duration-300 ${bgColor} text-white z-50`;
+ box.style.opacity = 1;
+
+ clearTimeout(messageBoxTimeout);
+ messageBoxTimeout = setTimeout(() => {
+ box.style.opacity = 0;
+ }, 3000);
+ }
+
+ // --- INITIALIZATION ---
+ window.onload = () => {
+ initializeFirebase();
+ injectDummyTEKS(); // Attempt to populate if empty
+ renderApp();
+ };
+
+ </script>
+ <style>
+ @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+ body {
+ font-family: 'Inter', sans-serif;
+ background-color: #f3f4f6;
+ min-height: 100vh;
+ }
+ </style>
 </head>
-<body class="bg-explorer min-h-screen font-sans">
-
-    <!-- Navbar -->
-    <nav class="sticky top-0 z-50 bg-white shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center">
-                    <span class="text-3xl font-extrabold text-blue-600 tracking-tight flex items-center">
-                        <i data-lucide="calculator" class="w-7 h-7 mr-2 text-indigo-500"></i>
-                        Math Explorer
-                    </span>
-                </div>
-                <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                    <button onclick="navigate('home')" class="text-gray-500 hover:text-blue-600 px-3 py-2 font-medium transition duration-150">Home</button>
-                    <button onclick="navigate('learn')" class="text-gray-500 hover:text-blue-600 px-3 py-2 font-medium transition duration-150">Learn Math (6-8)</button>
-                    <button onclick="navigate('tutor')" class="text-gray-500 hover:text-blue-600 px-3 py-2 font-medium transition duration-150">Personal Tutoring</button>
-                    <button onclick="navigate('contact')" class="text-gray-500 hover:text-blue-600 px-3 py-2 font-medium transition duration-150">Contact</button>
-                </div>
-                <div class="flex items-center">
-                     <span id="userIdDisplay" class="text-xs text-gray-500 italic hidden sm:block">User ID: Loading...</span>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Main Content Area -->
-    <div id="app" class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-        <!-- Content will be injected here -->
-    </div>
-
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Global Firebase variables
-        let db;
-        let auth;
-        let userId = 'anon-user-' + crypto.randomUUID();
-        let appReady = false;
-
-        // Firebase Initialization
-        async function initializeFirebase() {
-            setLogLevel('Debug');
-            try {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-
-                if (Object.keys(firebaseConfig).length === 0 || appId === 'default-app-id') {
-                    console.error("Firebase config or App ID is missing. Using anonymous mode.");
-                    throw new Error("Missing Firebase Config");
-                }
-
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                // Authentication
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        document.getElementById('userIdDisplay').classList.remove('hidden');
-                        appReady = true;
-                        // Start listening to data after successful auth
-                        listenForMasteryData();
-                        window.startApp();
-                    } else {
-                        console.log("No user signed in.");
-                        userId = 'anon-user-' + crypto.randomUUID();
-                        appReady = true;
-                        window.startApp();
-                    }
-                });
-
-            } catch (error) {
-                console.error("Firebase setup failed:", error);
-                document.getElementById('userIdDisplay').textContent = `User ID: ${userId} (Offline Mode)`;
-                document.getElementById('userIdDisplay').classList.remove('hidden');
-                appReady = true;
-                window.startApp();
-            }
-        }
-
-        // --- Data Persistence and Retrieval ---
-
-        // Global object to store mastery data
-        window.masteryData = {};
-
-        function getUserDataRef() {
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            return doc(db, `artifacts/${appId}/users/${userId}/math_explorer_data/mastery`);
-        }
-
-        function listenForMasteryData() {
-            if (!db || !appReady) return;
-
-            const dataRef = getUserDataRef();
-
-            onSnapshot(dataRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    window.masteryData = docSnap.data();
-                    console.log("Mastery data loaded:", window.masteryData);
-                } else {
-                    console.log("No mastery data found. Initializing new data.");
-                    window.masteryData = {};
-                }
-                // Re-render the current view to reflect updated mastery status
-                window.renderCurrentPage();
-            }, (error) => {
-                console.error("Error listening to mastery data:", error);
-            });
-        }
-
-        window.saveMasteryData = async function(gradeId, tekId, isCorrect) {
-            if (!db || !appReady) {
-                console.warn("App not fully ready or running offline. Cannot save data.");
-                return;
-            }
-
-            if (!window.masteryData[gradeId]) {
-                window.masteryData[gradeId] = {};
-            }
-            if (!window.masteryData[gradeId][tekId]) {
-                window.masteryData[gradeId][tekId] = { correct: 0, attempted: 0, mastered: false };
-            }
-
-            const tekState = window.masteryData[gradeId][tekId];
-            tekState.attempted++;
-            if (isCorrect) {
-                tekState.correct++;
-            }
-
-            // Mastery logic: 6 out of 8 correct (75%)
-            if (tekState.correct >= 6 && tekState.attempted === 8) {
-                tekState.mastered = true;
-            } else if (tekState.attempted > 8) {
-                // Prevent infinite attempts from breaking logic, but still track progress
-            }
-
-            console.log("Saving mastery update:", window.masteryData);
-            try {
-                await setDoc(getUserDataRef(), window.masteryData, { merge: true });
-            } catch (e) {
-                console.error("Error saving document: ", e);
-            }
-        }
-
-        // Kick off Firebase initialization
-        initializeFirebase();
-
-    </script>
-
-    <script>
-        // --- Random Data Generation (Outside of Firebase block) ---
-        function generateRandomPhoneNumber() {
-            const area = Math.floor(Math.random() * 900 + 100);
-            const central = Math.floor(Math.random() * 900 + 100);
-            const line = Math.floor(Math.random() * 9000 + 1000);
-            return `(${area}) ${central}-${line}`;
-        }
-        const RANDOM_PHONE = generateRandomPhoneNumber();
-
-        // --- Question Data (8 questions per TEK) ---
-        const TEKS_DATA = {
-            '6': [
-                { id: '6.2A', title: 'Classify Rational Numbers', description: 'Venn diagrams, whole numbers, integers.', questions: [
-                    { q: 'Is $\\frac{1}{2}$ an Integer?', ans: 'No', type: 'radio', options: ['Yes', 'No'] },
-                    { q: 'Is $-5$ a Whole Number?', ans: 'No', type: 'radio', options: ['Yes', 'No'] },
-                    { q: 'Is $12$ a Rational Number?', ans: 'Yes', type: 'radio', options: ['Yes', 'No'] },
-                    { q: 'Which category does $-0.75$ belong to?', ans: 'Rational', type: 'radio', options: ['Whole', 'Integer', 'Rational'] },
-                    { q: 'All Integers are also Rational Numbers.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'What is the absolute value of $-15$?', ans: '15', type: 'text' },
-                    { q: 'Classify $100$: Whole, Integer, or Rational?', ans: 'All three', type: 'text' },
-                    { q: 'Is $0$ a Whole Number?', ans: 'Yes', type: 'radio', options: ['Yes', 'No'] }
-                ]},
-                { id: '6.3D', title: 'Integer Operations Fluency', description: 'Add, subtract, multiply, and divide integers.', questions: [
-                    { q: 'Solve: $5 + (-12)$', ans: '-7', type: 'text' },
-                    { q: 'Solve: $-8 \\times -4$', ans: '32', type: 'text' },
-                    { q: 'Solve: $-20 \\div 5$', ans: '-4', type: 'text' },
-                    { q: 'Solve: $10 - (-3)$', ans: '13', type: 'text' },
-                    { q: 'Solve: $-1 - 10$', ans: '-11', type: 'text' },
-                    { q: 'Solve: $(-2)^3$', ans: '-8', type: 'text' },
-                    { q: 'Solve: $-18 \\div -2$', ans: '9', type: 'text' },
-                    { q: 'Solve: $-7 + 7$', ans: '0', type: 'text' }
-                ]},
-                { id: '6.4B', title: 'Ratios and Rates', description: 'Real-world proportional relationships and rates.', questions: [
-                    { q: 'A car travels 150 miles in 3 hours. What is its unit rate in mph?', ans: '50', type: 'text' },
-                    { q: 'The ratio of apples to bananas is 2:3. If there are 8 apples, how many bananas are there?', ans: '12', type: 'text' },
-                    { q: 'Which is the better buy: 4 oranges for $2.00 or 6 oranges for $2.40?', ans: '6 oranges for $2.40', type: 'text' },
-                    { q: 'A recipe uses 3 cups of flour for 2 dozen cookies. How many cups for 6 dozen?', ans: '9', type: 'text' },
-                    { q: 'If $3 \\text{ out of } 5$ students prefer pizza, what percent prefer pizza?', ans: '60%', type: 'text' },
-                    { q: 'A rate is a ratio comparing two quantities with different units.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'If 4 shirts cost $60, what is the cost of 1 shirt?', ans: '15', type: 'text' },
-                    { q: 'The ratio $1:2$ is equivalent to $10:20$.', ans: 'True', type: 'radio', options: ['True', 'False'] }
-                ]},
-                { id: '6.7A', title: 'Order of Operations', description: 'Equivalent numerical expressions using PEMDAS.', questions: [
-                    { q: 'Solve: $10 + 2 \\times 3$', ans: '16', type: 'text' },
-                    { q: 'Solve: $(15 - 5) \\div 2$', ans: '5', type: 'text' },
-                    { q: 'Solve: $2^3 - 4$', ans: '4', type: 'text' },
-                    { q: 'Solve: $12 \\div 3 + 1$', ans: '5', type: 'text' },
-                    { q: 'Solve: $3(4 + 1)$', ans: '15', type: 'text' },
-                    { q: 'Which operation is done first in $8 \\times (4 + 2)$?', ans: 'Addition', type: 'radio', options: ['Multiplication', 'Addition', 'Subtraction'] },
-                    { q: 'Solve: $1 + 1^5$', ans: '2', type: 'text' },
-                    { q: 'Solve: $100 - (50 - 10)$', ans: '60', type: 'text' }
-                ]},
-                { id: '6.14H', title: 'Financial Literacy: Checking Accounts', description: 'Importance of checking account records.', questions: [
-                    { q: 'Why is balancing a checkbook important?', ans: 'To prevent overdrafts', type: 'text' },
-                    { q: 'What is an overdraft?', ans: 'Spending more money than you have', type: 'text' },
-                    { q: 'The bank\'s record is always correct.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'What is a debit card?', ans: 'A card that withdraws money directly from a checking account', type: 'text' },
-                    { q: 'What is the minimum age to open a checking account without a guardian?', ans: '18', type: 'text' },
-                    { q: 'Which item decreases your checking account balance?', ans: 'Writing a check', type: 'radio', options: ['Making a deposit', 'Writing a check', 'Earning interest'] },
-                    { q: 'What is a deposit?', ans: 'Adding money to the account', type: 'text' },
-                    { q: 'Checking account records help you track spending.', ans: 'True', type: 'radio', options: ['True', 'False'] }
-                ]},
-            ],
-            '7': [
-                { id: '7.3A', title: 'Rational Number Operations', description: 'Fluently add, subtract, multiply, and divide fractions and decimals.', questions: [
-                    { q: 'Solve: $2.5 + (-1.2)$', ans: '1.3', type: 'text' },
-                    { q: 'Solve: $\\frac{1}{2} \\times (-\\frac{3}{4})$', ans: '-\\frac{3}{8}', type: 'text' },
-                    { q: 'Solve: $10.8 \\div -0.9$', ans: '-12', type: 'text' },
-                    { q: 'Solve: $\\frac{5}{6} - \\frac{1}{3}$', ans: '\\frac{1}{2}', type: 'text' },
-                    { q: 'Solve: $-4.1 - (-1.1)$', ans: '-3', type: 'text' },
-                    { q: 'Solve: $1 \\frac{1}{4} \\div 2 \\frac{1}{2}$', ans: '\\frac{1}{2}', type: 'text' },
-                    { q: 'Solve: $-\\frac{2}{5} + \\frac{1}{10}$', ans: '-\\frac{3}{10}', type: 'text' },
-                    { q: 'Solve: $-0.5 \\times -20$', ans: '10', type: 'text' }
-                ]},
-                { id: '7.4D', title: 'Multi-step Percent Problems', description: 'Solve multi-step problems involving percent increase/decrease.', questions: [
-                    { q: 'A shirt is $50.00$ and is on sale for $20\\%$ off. What is the discount amount?', ans: '$10.00', type: 'text' },
-                    { q: 'The population grew from $100$ to $120$. What is the percent increase?', ans: '20%', type: 'text' },
-                    { q: 'A $10\\%$ tax is added to a $40.00$ meal. What is the total cost?', ans: '$44.00', type: 'text' },
-                    { q: 'An item cost $80$ after a $20\\%$ markdown. What was the original price?', ans: '$100.00', type: 'text' },
-                    { q: 'A value of $25$ is $50\\%$ of what number?', ans: '50', type: 'text' },
-                    { q: 'A shoe is $75.00$ with a $6\\%$ sales tax. What is the tax amount?', ans: '$4.50', type: 'text' },
-                    { q: 'If $70$ is decreased by $10\\%$, what is the new value?', ans: '63', type: 'text' },
-                    { q: 'If a commission rate is $5\\%$, how much commission is earned on a $2000$ sale?', ans: '$100', type: 'text' }
-                ]},
-                { id: '7.9B', title: 'Circumference and Area of Circles', description: 'Determine the circumference and area of circles.', questions: [
-                    { q: 'What is the circumference of a circle with a diameter of $10$? (Use $\\pi$)', ans: '$10\\pi$', type: 'text' },
-                    { q: 'What is the area of a circle with a radius of $5$? (Use $\\pi$)', ans: '$25\\pi$', type: 'text' },
-                    { q: 'If the circumference is $8\\pi$, what is the diameter?', ans: '8', type: 'text' },
-                    { q: 'If the area is $49\\pi$, what is the radius?', ans: '7', type: 'text' },
-                    { q: 'Circumference is the distance (around) or (inside) a circle.', ans: 'around', type: 'radio', options: ['around', 'inside'] },
-                    { q: 'Area is calculated using the formula $A = 2\\pi r$.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'What is the formula for area of a circle?', ans: '$A = \\pi r^2$', type: 'text' },
-                    { q: 'A semi-circle has a diameter of $10$. What is the area of the full circle?', ans: '$25\\pi$', type: 'text' }
-                ]},
-                { id: '7.11A', title: 'Two-Step Equations', description: 'Model and solve one-variable, two-step equations.', questions: [
-                    { q: 'Solve for $x$: $2x + 5 = 15$', ans: '5', type: 'text' },
-                    { q: 'Solve for $y$: $3y - 1 = 11$', ans: '4', type: 'text' },
-                    { q: 'Solve for $m$: $\\frac{m}{4} + 2 = 6$', ans: '16', type: 'text' },
-                    { q: 'Solve for $p$: $10 = 2p - 8$', ans: '9', type: 'text' },
-                    { q: 'Solve for $z$: $-3z + 9 = 0$', ans: '3', type: 'text' },
-                    { q: 'What is the first step in solving $5x - 3 = 12$?', ans: 'Add 3 to both sides', type: 'text' },
-                    { q: 'If $4x - 1 = 7$, then $4x = 8$.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'Solve for $k$: $6 - k = 2$', ans: '4', type: 'text' }
-                ]},
-                { id: '7.13A', title: 'Sales and Income Tax', description: 'Calculate sales tax for a given purchase and income tax for earned wages.', questions: [
-                    { q: 'If a sales tax is $8\\%$, what decimal do you multiply by to find the tax amount?', ans: '0.08', type: 'text' },
-                    { q: 'You earn $200$ and pay $15\\%$ in income tax. How much tax did you pay?', ans: '$30', type: 'text' },
-                    { q: 'A bike costs $300$ plus $5\\%$ sales tax. What is the total cost?', ans: '$315', type: 'text' },
-                    { q: 'What is the primary difference between sales tax and income tax?', ans: 'Sales tax is on purchases, income tax is on wages', type: 'text' },
-                    { q: 'If the tax rate is $7\\%$, the tax on a $10$ item is $0.70$.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'Income tax is calculated based on your net income.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'If you owe $100$ in tax and made $1000$, what is your tax rate?', ans: '10%', type: 'text' },
-                    { q: 'Taxes are paid to the government.', ans: 'True', type: 'radio', options: ['True', 'False'] }
-                ]},
-            ],
-            '8': [
-                { id: '8.2B', title: 'Approximate Irrational Numbers', description: 'Approximate the value of an irrational number.', questions: [
-                    { q: 'Which two integers is $\\sqrt{10}$ between?', ans: '3 and 4', type: 'text' },
-                    { q: 'Is $\\pi$ rational or irrational?', ans: 'Irrational', type: 'radio', options: ['Rational', 'Irrational'] },
-                    { q: 'The approximate value of $\\sqrt{2}$ is $1.41$.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'Approximate $\\sqrt{40}$ to the nearest whole number.', ans: '6', type: 'text' },
-                    { q: 'Is $0.121212...$ rational or irrational?', ans: 'Rational', type: 'radio', options: ['Rational', 'Irrational'] },
-                    { q: 'Which is greater: $3$ or $\\sqrt{8}$?', ans: '3', type: 'radio', options: ['3', '$\\sqrt{8}$'] },
-                    { q: 'What is the value of $\\sqrt{121}$?', ans: '11', type: 'text' },
-                    { q: 'Irrational numbers can be written as a fraction $\\frac{a}{b}$.', ans: 'False', type: 'radio', options: ['True', 'False'] }
-                ]},
-                { id: '8.4B', title: 'Slope and Y-Intercept', description: 'Determine rate of change (slope) and $y$-intercept from data.', questions: [
-                    { q: 'Find the slope of the line passing through $(0, 2)$ and $(2, 8)$.', ans: '3', type: 'text' },
-                    { q: 'What is the $y$-intercept of the equation $y = 5x - 1$?', ans: '-1', type: 'text' },
-                    { q: 'If a table shows a constant rate of change of 4, what is the slope?', ans: '4', type: 'text' },
-                    { q: 'In the equation $y = 3x + 1$, what is the rate of change?', ans: '3', type: 'text' },
-                    { q: 'A line has a $y$-intercept of $5$ and a slope of $-2$. Write the equation.', ans: '$y = -2x + 5$', type: 'text' },
-                    { q: 'The $y$-intercept is the point where the graph crosses the $x$-axis.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'The slope is the (rise over run) or (run over rise).', ans: 'rise over run', type: 'radio', options: ['rise over run', 'run over rise'] },
-                    { q: 'The $y$-intercept is also known as the initial value.', ans: 'True', type: 'radio', options: ['True', 'False'] }
-                ]},
-                { id: '8.7C', title: 'Pythagorean Theorem', description: 'Use the Pythagorean theorem ($a^2 + b^2 = c^2$) to solve problems.', questions: [
-                    { q: 'In a right triangle, if $a=3$ and $b=4$, what is $c$?', ans: '5', type: 'text' },
-                    { q: 'If the hypotenuse $c=13$ and $a=5$, what is $b$?', ans: '12', type: 'text' },
-                    { q: 'The hypotenuse is the longest side of a right triangle.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'The legs are always opposite the right angle.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'If $a=6$ and $b=8$, what is $c$?', ans: '10', type: 'text' },
-                    { q: 'What is the formula for the Pythagorean theorem?', ans: '$a^2 + b^2 = c^2$', type: 'text' },
-                    { q: 'A ladder 17ft long leans against a wall. The base is 8ft away. How high up is the ladder?', ans: '15', type: 'text' },
-                    { q: 'A triangle with sides $1, 2, 3$ is a right triangle.', ans: 'False', type: 'radio', options: ['True', 'False'] }
-                ]},
-                { id: '8.8A', title: 'Equations with Variables on Both Sides', description: 'Write one-variable equations with variables on both sides.', questions: [
-                    { q: 'Solve: $2x + 1 = x + 5$', ans: '4', type: 'text' },
-                    { q: 'Solve: $5m - 2 = 3m + 8$', ans: '5', type: 'text' },
-                    { q: 'Solve: $4y = 2y + 10$', ans: '5', type: 'text' },
-                    { q: 'Solve: $3(z + 2) = 15$', ans: '3', type: 'text' },
-                    { q: 'Solve: $10 - p = 3p + 2$', ans: '2', type: 'text' },
-                    { q: 'What is the first step to solve $6x = 4x + 12$?', ans: 'Subtract 4x from both sides', type: 'text' },
-                    { q: 'The solution to $x + 1 = x + 2$ is $x = 1$.', ans: 'False', type: 'radio', options: ['True', 'False'] },
-                    { q: 'Solve: $\\frac{1}{2} w + 1 = 2$', ans: '2', type: 'text' }
-                ]},
-                { id: '8.10A', title: 'Geometric Transformations', description: 'Properties of rotations, reflections, translations, and dilations.', questions: [
-                    { q: 'Which transformation *does not* preserve congruence?', ans: 'Dilation', type: 'radio', options: ['Rotation', 'Reflection', 'Translation', 'Dilation'] },
-                    { q: 'The transformation $(x, y) \\to (x + 3, y - 1)$ is a: (Translation/Reflection)', ans: 'Translation', type: 'radio', options: ['Translation', 'Reflection'] },
-                    { q: 'Reflecting a shape over the $x$-axis changes $(x, y)$ to:', ans: '$(x, -y)$', type: 'text' },
-                    { q: 'Rotating a shape $90^\\circ$ clockwise changes orientation.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'A dilation with scale factor $k>1$ makes the shape (larger/smaller).', ans: 'larger', type: 'radio', options: ['larger', 'smaller'] },
-                    { q: 'The transformation $(x, y) \\to (-x, y)$ is a reflection over the (x-axis/y-axis).', ans: 'y-axis', type: 'radio', options: ['x-axis', 'y-axis'] },
-                    { q: 'A translation is also called a slide.', ans: 'True', type: 'radio', options: ['True', 'False'] },
-                    { q: 'If a shape is translated, its size remains the same.', ans: 'True', type: 'radio', options: ['True', 'False'] }
-                ]},
-            ]
-        };
-
-        // --- Global State and Routing ---
-        let currentPage = 'home';
-        let currentTek = null;
-        let currentQuestionIndex = 0;
-        let correctInSession = 0;
-        const appDiv = document.getElementById('app');
-
-        // Function to start the app after Firebase auth is complete
-        window.startApp = function() {
-            // Render the initial page
-            navigate(currentPage);
-            // Ensure Lucide icons are rendered
-            lucide.createIcons();
-        }
-
-        function navigate(page, data = null) {
-            currentPage = page;
-            currentTek = null;
-            currentQuestionIndex = 0;
-            correctInSession = 0;
-            window.renderCurrentPage(data);
-        }
-
-        window.renderCurrentPage = function(data = null) {
-            appDiv.innerHTML = '';
-            let content = '';
-
-            // Render content based on current page
-            if (currentPage === 'home') {
-                content = renderHomePage();
-            } else if (currentPage === 'learn') {
-                content = renderLearnPage();
-            } else if (currentPage === 'tek_view' && data) {
-                currentTek = data;
-                content = renderTekView(currentTek);
-            } else if (currentPage === 'quiz') {
-                content = renderQuizPage();
-            } else if (currentPage === 'tutor') {
-                content = renderTutorPage();
-            } else if (currentPage === 'contact') {
-                content = renderContactPage();
-            }
-
-            appDiv.innerHTML = content;
-            lucide.createIcons();
-            
-            // Render MathJax/LaTeX
-            if (typeof MathJax !== 'undefined' && MathJax.typeset) {
-                MathJax.typeset();
-            }
-        }
-
-        // --- Page Rendering Functions ---
-
-        function renderHomePage() {
-            return `
-                <div class="text-center py-12 px-4">
-                    <h1 class="text-6xl font-extrabold text-blue-800 mb-4">Welcome to Math Explorer!</h1>
-                    <p class="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-                        Your personalized journey to mastering 6th, 7th, and 8th Grade math, aligned perfectly with **Texas TEKS**. Get instant feedback, track your progress, and conquer math!
-                    </p>
-                    <button onclick="navigate('learn')" class="px-8 py-3 bg-indigo-600 text-white font-bold rounded-full shadow-lg hover:bg-indigo-700 transition duration-300 transform hover:scale-105 flex items-center justify-center mx-auto w-fit">
-                        <i data-lucide="sparkles" class="w-5 h-5 mr-2"></i>
-                        Start Learning Now
-                    </button>
-                    <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-                        ${renderFeatureCard('Personalized Path', 'user-check', 'Focus only on the TEKS you need to master.', 'text-green-500')}
-                        ${renderFeatureCard('Instant Feedback', 'message-square-check', 'Know immediately if you got the question right or wrong.', 'text-yellow-500')}
-                        ${renderFeatureCard('Achieve Mastery', 'trophy', 'Complete 6/8 questions correctly to achieve mastery in a skill.', 'text-red-500')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderFeatureCard(title, icon, text, color) {
-            return `
-                <div class="bg-white p-6 rounded-xl shadow-xl border-t-4 border-indigo-400">
-                    <i data-lucide="${icon}" class="w-8 h-8 ${color} mb-3"></i>
-                    <h3 class="text-xl font-semibold text-gray-800 mb-2">${title}</h3>
-                    <p class="text-gray-500">${text}</p>
-                </div>
-            `;
-        }
-
-        function renderLearnPage() {
-            let gradeCards = '';
-            for (const grade in TEKS_DATA) {
-                gradeCards += `
-                    <div class="bg-white p-6 rounded-2xl shadow-xl border-t-8 border-yellow-500 mb-8">
-                        <h2 class="text-4xl font-extrabold text-gray-900 mb-6">Grade ${grade} Math</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            ${TEKS_DATA[grade].map(tek => renderTekCard(grade, tek)).join('')}
-                        </div>
-                    </div>
-                `;
-            }
-            return `
-                <h1 class="text-5xl font-extrabold text-gray-800 mb-10 text-center">TEKS Mastery Dashboard</h1>
-                ${gradeCards}
-            `;
-        }
-
-        function renderTekCard(gradeId, tek) {
-            const tekState = window.masteryData[gradeId] ? window.masteryData[gradeId][tek.id] : null;
-            const isMastered = tekState && tekState.mastered;
-            const correctCount = tekState ? tekState.correct : 0;
-
-            return `
-                <div class="tek-card-gradient p-4 rounded-xl shadow-md flex justify-between items-center">
-                    <div>
-                        <span class="text-xs font-semibold uppercase ${isMastered ? 'text-green-800' : 'text-blue-800'}">${tek.id}</span>
-                        <h4 class="text-lg font-bold text-gray-800">${tek.title}</h4>
-                        <p class="text-sm text-gray-600">${tek.description}</p>
-                        <p class="text-sm font-medium mt-1">Progress: ${correctCount}/8 Correct</p>
-                    </div>
-                    <button onclick="navigate('tek_view', {gradeId: '${gradeId}', tekId: '${tek.id}'})"
-                        class="px-4 py-2 text-white font-semibold rounded-full shadow-lg transition duration-150 ${isMastered ? 'mastered-badge' : 'bg-indigo-500 hover:bg-indigo-600'}">
-                        ${isMastered ? '<i data-lucide="check-circle" class="w-5 h-5 inline mr-1"></i> Mastered' : '<i data-lucide="chevron-right" class="w-5 h-5 inline"></i> Start'}
-                    </button>
-                </div>
-            `;
-        }
-
-        function renderTekView(tekInfo) {
-            const tek = TEKS_DATA[tekInfo.gradeId].find(t => t.id === tekInfo.tekId);
-            if (!tek) return '<p class="text-red-500">TEKS not found.</p>';
-
-            return `
-                <div class="bg-white p-6 rounded-xl shadow-xl">
-                    <button onclick="navigate('learn')" class="text-indigo-500 hover:text-indigo-700 mb-4 flex items-center">
-                        <i data-lucide="arrow-left" class="w-5 h-5 mr-1"></i> Back to Dashboard
-                    </button>
-                    <h1 class="text-4xl font-extrabold text-gray-900 mb-2">${tek.title}</h1>
-                    <p class="text-lg text-gray-600 mb-6">${tek.description}</p>
-
-                    <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                        <h3 class="text-2xl font-semibold text-indigo-700 mb-3">Quiz: 8 Questions</h3>
-                        <p class="text-gray-700">Get 6 out of 8 correct to achieve **Mastery** for this skill!</p>
-                    </div>
-
-                    <button onclick="navigate('quiz', {gradeId: '${tekInfo.gradeId}', tekId: '${tekInfo.tekId}'})"
-                        class="mt-6 w-full px-8 py-3 bg-green-500 text-white font-bold rounded-lg shadow-lg hover:bg-green-600 transition duration-300 transform hover:scale-[1.01]">
-                        <i data-lucide="play-circle" class="w-5 h-5 inline mr-2"></i> Begin Assessment
-                    </button>
-                </div>
-            `;
-        }
-
-        function renderQuizPage() {
-            if (!currentTek) {
-                return navigate('learn');
-            }
-            const tek = TEKS_DATA[currentTek.gradeId].find(t => t.id === currentTek.tekId);
-            const question = tek.questions[currentQuestionIndex];
-
-            // Render instant feedback message
-            const feedback = document.getElementById('quiz-feedback') ? document.getElementById('quiz-feedback').innerHTML : '';
-
-            let inputElement;
-            if (question.type === 'radio') {
-                inputElement = question.options.map(opt => `
-                    <label class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 border border-gray-200">
-                        <input type="radio" name="answer" value="${opt}" class="form-radio h-5 w-5 text-indigo-600">
-                        <span class="text-lg text-gray-700">${opt}</span>
-                    </label>
-                `).join('');
-            } else { // type: 'text'
-                inputElement = `
-                    <input type="text" id="text-answer" placeholder="Enter your numerical or textual answer here" class="w-full p-3 border-2 border-indigo-300 rounded-lg text-lg focus:ring-indigo-500 focus:border-indigo-500" />
-                `;
-            }
-
-            return `
-                <div class="bg-white p-6 rounded-xl shadow-2xl">
-                    <h3 class="text-xl text-gray-500 mb-1">Question ${currentQuestionIndex + 1} of 8</h3>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-                        <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${((currentQuestionIndex) / 8) * 100}%"></div>
-                    </div>
-
-                    <div id="quiz-feedback" class="mb-4">${feedback}</div>
-
-                    <div class="bg-blue-50 p-5 rounded-lg border-l-4 border-blue-500 mb-6">
-                        <p class="text-3xl font-semibold text-gray-800">
-                            ${question.q}
-                        </p>
-                    </div>
-
-                    <div class="space-y-4">
-                        ${inputElement}
-                    </div>
-
-                    <button onclick="submitAnswer()" class="mt-8 w-full px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-150">
-                        Submit Answer
-                    </button>
-                    <button onclick="navigate('learn')" class="mt-4 w-full text-sm text-gray-500 hover:text-gray-700">Exit Quiz</button>
-                </div>
-            `;
-        }
-
-        window.submitAnswer = function() {
-            const tek = TEKS_DATA[currentTek.gradeId].find(t => t.id === currentTek.tekId);
-            const question = tek.questions[currentQuestionIndex];
-            let userAnswer;
-
-            if (question.type === 'radio') {
-                const checked = document.querySelector('input[name="answer"]:checked');
-                userAnswer = checked ? checked.value.trim() : null;
-            } else {
-                userAnswer = document.getElementById('text-answer').value.trim();
-            }
-
-            if (!userAnswer) {
-                // Use a modal-like message instead of alert
-                document.getElementById('quiz-feedback').innerHTML = `
-                    <div class="p-3 bg-yellow-100 text-yellow-800 rounded-lg font-medium">Please select or type an answer.</div>
-                `;
-                return;
-            }
-
-            let isCorrect = false;
-            let expectedAnswer = question.ans.toLowerCase().replace(/[\s$,]/g, '').replace('$', '');
-            let actualAnswer = userAnswer.toLowerCase().replace(/[\s$,]/g, '').replace('$', '');
-
-            if (actualAnswer === expectedAnswer) {
-                isCorrect = true;
-                correctInSession++;
-            } else if (actualAnswer.startsWith('$') && actualAnswer.substring(1) === expectedAnswer) {
-                 isCorrect = true; // Handle optional '$' in user input
-            } else {
-                // MathJax normalization for fractions/exponents can be complex, so we stick to strict string matching for simplicity here.
-                // A better approach would be to parse the math, but that adds too much complexity/lines.
-            }
-
-            // Save the attempt via Firebase/Firestore (asynchronously)
-            window.saveMasteryData(currentTek.gradeId, currentTek.tekId, isCorrect);
-
-            // Display Feedback
-            if (isCorrect) {
-                document.getElementById('quiz-feedback').innerHTML = `
-                    <div class="p-3 bg-green-100 text-green-800 rounded-lg font-bold flex items-center">
-                        <i data-lucide="check-circle" class="w-5 h-5 mr-2"></i> Correct! Keep going! (Current session score: ${correctInSession})
-                    </div>
-                `;
-            } else {
-                document.getElementById('quiz-feedback').innerHTML = `
-                    <div class="p-3 bg-red-100 text-red-800 rounded-lg font-bold flex items-center">
-                        <i data-lucide="x-circle" class="w-5 h-5 mr-2"></i> Incorrect. The correct answer was: ${question.ans}
-                    </div>
-                `;
-            }
-            lucide.createIcons();
-
-            // Check if quiz is over
-            currentQuestionIndex++;
-            if (currentQuestionIndex >= tek.questions.length) {
-                // Quiz complete, navigate to summary
-                setTimeout(() => navigate('tek_view', currentTek), 2000);
-            } else {
-                // Next question
-                setTimeout(() => window.renderCurrentPage(), 1500); // Small delay for user to read feedback
-            }
-        }
-
-        function renderTutorPage() {
-            return `
-                <div class="bg-white p-6 rounded-xl shadow-2xl border-l-8 border-indigo-500">
-                    <h1 class="text-4xl font-extrabold text-indigo-700 mb-4 flex items-center">
-                        <i data-lucide="graduation-cap" class="w-8 h-8 mr-3"></i>
-                        Personalized Tutoring
-                    </h1>
-                    <p class="text-xl text-gray-600 mb-6">
-                        Struggling with a concept? Our tutors are here to provide one-on-one help tailored to your specific TEKS.
-                    </p>
-
-                    <div class="space-y-4">
-                        ${renderTutorFeature('Tailored Sessions', 'We analyze your Math Explorer performance to focus exactly on the skills where you need the most support (e.g., all 6.7A Order of Operations questions).', 'bar-chart-2')}
-                        ${renderTutorFeature('Flexible Scheduling', 'Book a session online that fits your schedule, whether it\'s after school or on weekends.', 'calendar-check')}
-                        ${renderTutorFeature('Concept Deep Dive', 'Move beyond just "right" or "wrong" to truly understand the underlying mathematical concepts.', 'lightbulb')}
-                    </div>
-
-                    <div class="mt-8 p-6 bg-indigo-50 rounded-lg">
-                        <h3 class="text-2xl font-semibold text-indigo-700 mb-3">Get Started Today!</h3>
-                        <p class="text-gray-700">Email us to request a personalized tutoring package:</p>
-                        <p class="text-lg font-mono text-indigo-600 mt-2">tutor@mathexplorer.com</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderTutorFeature(title, text, icon) {
-            return `
-                <div class="flex items-start p-4 bg-gray-50 rounded-lg shadow-sm">
-                    <i data-lucide="${icon}" class="w-6 h-6 text-green-500 mr-4 mt-1"></i>
-                    <div>
-                        <h4 class="text-lg font-semibold text-gray-800">${title}</h4>
-                        <p class="text-gray-600 text-sm">${text}</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderContactPage() {
-            return `
-                <div class="bg-white p-6 rounded-xl shadow-2xl border-l-8 border-red-500">
-                    <h1 class="text-4xl font-extrabold text-red-700 mb-4 flex items-center">
-                        <i data-lucide="mail" class="w-8 h-8 mr-3"></i>
-                        Contact Us
-                    </h1>
-                    <p class="text-xl text-gray-600 mb-6">
-                        We are happy to answer any questions about our curriculum, platform, or tutoring services.
-                    </p>
-
-                    <div class="space-y-5 p-6 bg-red-50 rounded-lg">
-                        <div class="flex items-center space-x-4">
-                            <i data-lucide="phone" class="w-6 h-6 text-red-600"></i>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800">Phone Support</h3>
-                                <p class="text-gray-700 font-mono">${RANDOM_PHONE}</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center space-x-4">
-                            <i data-lucide="at-sign" class="w-6 h-6 text-red-600"></i>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800">Email Inquiry</h3>
-                                <p class="text-gray-700 font-mono">support@mathexplorer.com</p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-center space-x-4">
-                            <i data-lucide="map-pin" class="w-6 h-6 text-red-600"></i>
-                            <div>
-                                <h3 class="text-lg font-semibold text-gray-800">Headquarters</h3>
-                                <p class="text-gray-700">123 TEKS Lane, Dallas, TX 75201</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-    </script>
-
-    <!-- MathJax for LaTeX Rendering -->
-    <script>
-        // Use an inline script block to ensure MathJax is loaded and configured correctly
-        window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']]
-            },
-            svg: {
-                fontCache: 'global'
-            }
-        };
-    </script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<body>
+ <div id="app" class="min-h-screen flex flex-col">
+ <!-- Header / Navigation -->
+ <header class="p-4 bg-white shadow-lg sticky top-0 z-20">
+ <div class="max-w-7xl mx-auto flex justify-between items-center">
+ <h1 class="text-3xl font-extrabold text-indigo-600">TEKS Learning</h1>
+ <nav class="flex space-x-2 rounded-full bg-indigo-50 p-1">
+ <!-- Note: Practice mode temporarily highlights 'Home' -->
+ <button id="btn-home" onclick="toggleView('home')" class="nav-btn px-4 py-2 rounded-full font-semibold transition duration-200">
+ Home
+ </button>
+ <button id="btn-tracker" onclick="toggleView('tracker')" class="nav-btn px-4 py-2 rounded-full font-semibold transition duration-200">
+ Progress
+ </button>
+ <button id="btn-contact" onclick="toggleView('contact')" class="nav-btn px-4 py-2 rounded-full font-semibold transition duration-200">
+ Tutoring
+ </button>
+ </nav>
+ </div>
+ </header>
+
+ <!-- Main Content Container -->
+ <div id="main-content" class="flex-grow p-6">
+ <!-- Content injected here -->
+ <div class="text-center p-8 text-gray-500">Loading application...</div>
+ </div>
+ 
+ <!-- User ID Display -->
+ <div id="user-id-display" class="text-xs text-gray-400 absolute bottom-1 left-1">Loading User ID...</div>
+ </div>
+ 
+ <!-- MODAL FOR PRACTICE START -->
+ <div id="practice-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center hidden">
+ <div id="practice-modal-content" class="w-full mx-4">
+ <!-- Modal Content Injected Here -->
+ </div>
+ </div>
+
+ <!-- Floating Message Box -->
+ <div id="message-box" class="fixed bottom-4 right-4 p-4 rounded-lg shadow-2xl transition-opacity duration-300 opacity-0 z-50"></div>
 </body>
 </html>
